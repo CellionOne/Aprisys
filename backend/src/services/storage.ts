@@ -9,9 +9,9 @@ function getClient(): Client {
   return storageClient;
 }
 
-export async function uploadFile(key: string, buffer: Buffer, mimeType: string): Promise<void> {
+export async function uploadFile(key: string, buffer: Buffer, _mimeType: string): Promise<void> {
   const client = getClient();
-  await (client as any).uploadFromBytes(key, buffer, { contentType: mimeType });
+  await client.uploadFromBytes(key, buffer);
 }
 
 export async function downloadFile(key: string): Promise<Buffer> {
