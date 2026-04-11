@@ -234,7 +234,11 @@ server.listen(PORT, async () => {
   }
 
   if (process.env.NODE_ENV === 'production') {
-    await startScheduler();
+    try {
+      await startScheduler();
+    } catch (err) {
+      console.error('[Scheduler] Failed to start (non-fatal):', err);
+    }
   } else {
     console.log('[Scheduler] Disabled in development. Set NODE_ENV=production to enable.');
   }
