@@ -4,6 +4,8 @@ channel = "stable-23_11"
 
 [deployment]
 run = ["sh", "-c", "cd backend && npm run build && node dist/index.js"]
+deploymentTarget = "autoscale"
+build = ["sh", "-c", "cd frontend && npm install --include=dev && npm run build"]
 
 [[ports]]
 localPort = 5000
