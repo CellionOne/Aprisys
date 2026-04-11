@@ -44,12 +44,15 @@ router.post('/register',
       if (existing) return res.status(409).json({ error: 'Email already registered' });
 
       const password_hash = await bcrypt.hash(password, 12);
-      const verify_token = uuidv4();
+      const emailServiceAvailable = !!process.env.RESEND_API_KEY;
+      const verify_token = emailServiceAvailable ? uuidv4() : null;
+      // Auto-verify when no email service is configured so users can log in immediately
+      const email_verified = !emailServiceAvailable;
 
       const [sub] = await query<Subscriber>(
-        `INSERT INTO digest.subscribers (email, name, phone, password_hash, verify_token, account_type)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-        [email, name, phone ?? null, password_hash, verify_token, account_type]
+        `INSERT INTO digest.subscribers (email, name, phone, password_hash, verify_token, email_verified, account_type)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+        [email, name, phone ?? null, password_hash, verify_token, email_verified, account_type]
       );
 
       await query(`INSERT INTO digest.subscriptions (subscriber_id) VALUES ($1)`, [sub.id]);
@@ -57,14 +60,21 @@ router.post('/register',
       await query(`INSERT INTO digest.kyc_records (subscriber_id, entity_type) VALUES ($1,$2)`,
         [sub.id, account_type === 'retail' ? 'individual' : account_type]);
 
-      try {
-        await sendVerificationEmail(email, name, verify_token);
-      } catch (emailErr) {
-        console.error('[Auth] Verification email failed (non-fatal):', emailErr);
+      if (emailServiceAvailable) {
+        try {
+          await sendVerificationEmail(email, name, verify_token!);
+        } catch (emailErr) {
+          console.error('[Auth] Verification email failed (non-fatal):', emailErr);
+        }
+      } else {
+        console.log('[Auth] Email service not configured — account auto-verified for:', email);
       }
       await logEvent('auth.register', sub.id, email, 'subscriber', sub.id, { account_type }, req);
 
-      res.status(201).json({ message: 'Registration successful. Please verify your email.' });
+      const message = emailServiceAvailable
+        ? 'Registration successful. Please verify your email.'
+        : 'Registration successful. You can now log in.';
+      res.status(201).json({ message });
     } catch (err) {
       console.error('[Auth] Register error:', err);
       res.status(500).json({ error: 'Registration failed. Please try again.' });
@@ -96,7 +106,15 @@ router.post('/login',
 
       const valid = await bcrypt.compare(password, sub.password_hash);
       if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
-      if (!sub.email_verified) return res.status(403).json({ error: 'Please verify your email before logging in' });
+      if (!sub.email_verified) {
+        if (!process.env.RESEND_API_KEY) {
+          // Email service not configured — auto-verify so the user can log in
+          await query(`UPDATE digest.subscribers SET email_verified=true, verify_token=NULL WHERE id=$1`, [sub.id]);
+          sub.email_verified = true;
+        } else {
+          return res.status(403).json({ error: 'Please verify your email before logging in' });
+        }
+      }
 
       const accessToken = signAccess(sub.id, sub.email);
       const refreshToken = signRefresh(sub.id);
