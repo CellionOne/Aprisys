@@ -11,7 +11,13 @@ export async function startScheduler() {
   boss = new PgBoss(process.env.DATABASE_URL!);
 
   boss.on('error', (err) => console.error('[pg-boss] Error:', err));
-  await boss.start();
+
+  try {
+    await boss.start();
+  } catch (err) {
+    console.error('[Scheduler] pg-boss failed to start (non-fatal):', err);
+    return;
+  }
 
   // ── Daily digest 7:15pm WAT (18:15 UTC) ────────────────────────────────────
   await boss.schedule('compose-daily-digest', '15 18 * * *', {}, { tz: 'Africa/Lagos' });
