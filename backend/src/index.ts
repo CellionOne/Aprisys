@@ -22,6 +22,9 @@ import {
 const app = express();
 const PORT = parseInt(process.env.PORT ?? '5000');
 
+// Trust Replit's reverse proxy so express-rate-limit can read the real client IP
+app.set('trust proxy', 1);
+
 // ─── Security ────────────────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(cors({
