@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  body { @apply antialiased; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+}
+
+@layer components {
+  /* Retail portal */
+  .card { @apply bg-white rounded-xl border border-[#e5e4e0] p-6; }
+  .input { @apply w-full px-3.5 py-2.5 bg-white border border-[#e5e4e0] rounded-lg text-sm placeholder-[#aaa] focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-black/30 transition-all; }
+  .label { @apply block text-xs font-medium text-[#888] uppercase tracking-wider mb-1.5; }
+  .btn-primary { @apply inline-flex items-center justify-center gap-2 bg-[#1a1a1a] text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-[#333] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed; }
+  .btn-secondary { @apply inline-flex items-center justify-center gap-2 bg-white border border-[#e5e4e0] text-[#1a1a1a] px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-[#f8f7f4] active:scale-[0.98] transition-all disabled:opacity-50; }
+  .btn-teal { @apply inline-flex items-center justify-center gap-2 bg-[#1D9E75] text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-[#0F6E56] active:scale-[0.98] transition-all disabled:opacity-50; }
+
+  /* Deals portal (dark) */
+  .deals-card { @apply bg-[#1a1d24] rounded-xl border border-[#2a2d35] p-6; }
+  .deals-input { @apply w-full px-3.5 py-2.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-sm text-white placeholder-[#555] focus:outline-none focus:ring-2 focus:ring-[#1D9E75]/20 focus:border-[#1D9E75]/50 transition-all; }
+
+  /* Status badges */
+  .badge-green { @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-green-700; }
+  .badge-red { @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700; }
+  .badge-amber { @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700; }
+  .badge-gray { @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600; }
+  .badge-teal { @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-teal-50 text-teal-700; }
+  .badge-blue { @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700; }
+
+  /* Spin animation */
+  .spin { @apply animate-spin; }
+}

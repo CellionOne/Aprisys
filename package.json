@@ -1,0 +1,13 @@
+{
+  "name": "aprisys",
+  "version": "1.0.0",
+  "description": "Aprisys — Nigerian capital markets platform powered by Cellion One",
+  "scripts": {
+    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
+    "build": "cd backend && npm run build && cd ../frontend && npm run build",
+    "start": "cd backend && npm start"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
