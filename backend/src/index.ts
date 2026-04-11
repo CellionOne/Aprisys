@@ -36,26 +36,28 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { er
 const aiLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, message: { error: 'AI rate limit reached. Please wait.' } });
 const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 120 });
 
-// ─── Webhook route (needs raw body for HMAC) ─────────────────────────────────
-app.use('/webhooks', express.raw({ type: 'application/json' }), webhookRouter);
+// ─── Webhook route (needs raw body for HMAC, before json parsing) ────────────
+app.use('/api/webhooks', express.raw({ type: 'application/json' }), webhookRouter);
 
 // ─── Body parsing ────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// ─── Routes ──────────────────────────────────────────────────────────────────
-app.use('/auth', authLimiter, authRouter);
-app.use('/kyc', apiLimiter, kycRouter);
-app.use('/deals', apiLimiter, dealsRouter);
-app.use('/escrow', apiLimiter, escrowRouter);
-app.use('/notifications', apiLimiter, notificationsRouter);
-app.use('/watchlist', apiLimiter, watchlistRouter);
-app.use('/digest', apiLimiter, digestRouter);
-app.use('/ai', aiLimiter, aiRouter);
-app.use('/admin', apiLimiter, adminRouter);
+// ─── API routes (all prefixed /api for production SPA compatibility) ──────────
+const apiRouter = express.Router();
+
+apiRouter.use('/auth', authLimiter, authRouter);
+apiRouter.use('/kyc', apiLimiter, kycRouter);
+apiRouter.use('/deals', apiLimiter, dealsRouter);
+apiRouter.use('/escrow', apiLimiter, escrowRouter);
+apiRouter.use('/notifications', apiLimiter, notificationsRouter);
+apiRouter.use('/watchlist', apiLimiter, watchlistRouter);
+apiRouter.use('/digest', apiLimiter, digestRouter);
+apiRouter.use('/ai', aiLimiter, aiRouter);
+apiRouter.use('/admin', apiLimiter, adminRouter);
 
 // ─── Preferences ─────────────────────────────────────────────────────────────
-app.get('/preferences', async (req, res) => {
+apiRouter.get('/preferences', async (req, res) => {
   const { requireAuth } = await import('./middleware/auth.js');
   requireAuth(req as any, res, async () => {
     const { queryOne } = await import('./db/client.js');
@@ -64,7 +66,7 @@ app.get('/preferences', async (req, res) => {
   });
 });
 
-app.put('/preferences', async (req, res) => {
+apiRouter.put('/preferences', async (req, res) => {
   const { requireAuth } = await import('./middleware/auth.js');
   requireAuth(req as any, res, async () => {
     const { query } = await import('./db/client.js');
@@ -85,7 +87,7 @@ app.put('/preferences', async (req, res) => {
   });
 });
 
-app.put('/preferences/profile', async (req, res) => {
+apiRouter.put('/preferences/profile', async (req, res) => {
   const { requireAuth } = await import('./middleware/auth.js');
   requireAuth(req as any, res, async () => {
     const { query } = await import('./db/client.js');
@@ -99,7 +101,7 @@ app.put('/preferences/profile', async (req, res) => {
   });
 });
 
-app.post('/preferences/delete-account', async (req, res) => {
+apiRouter.post('/preferences/delete-account', async (req, res) => {
   const { requireAuth } = await import('./middleware/auth.js');
   requireAuth(req as any, res, async () => {
     const { query } = await import('./db/client.js');
@@ -112,7 +114,7 @@ app.post('/preferences/delete-account', async (req, res) => {
 });
 
 // Subscriptions
-app.get('/subscriptions/me', async (req, res) => {
+apiRouter.get('/subscriptions/me', async (req, res) => {
   const { requireAuth } = await import('./middleware/auth.js');
   requireAuth(req as any, res, async () => {
     const { queryOne } = await import('./db/client.js');
@@ -121,7 +123,7 @@ app.get('/subscriptions/me', async (req, res) => {
   });
 });
 
-app.post('/subscriptions/checkout', async (req, res) => {
+apiRouter.post('/subscriptions/checkout', async (req, res) => {
   const { requireAuth } = await import('./middleware/auth.js');
   requireAuth(req as any, res, async () => {
     const { initializeTransaction } = await import('./services/paystack.js');
@@ -143,7 +145,7 @@ app.post('/subscriptions/checkout', async (req, res) => {
   });
 });
 
-app.post('/subscriptions/cancel', async (req, res) => {
+apiRouter.post('/subscriptions/cancel', async (req, res) => {
   const { requireAuth } = await import('./middleware/auth.js');
   requireAuth(req as any, res, async () => {
     const { queryOne, query } = await import('./db/client.js');
@@ -160,7 +162,7 @@ app.post('/subscriptions/cancel', async (req, res) => {
 });
 
 // Portfolio
-app.get('/portfolio', async (req, res) => {
+apiRouter.get('/portfolio', async (req, res) => {
   const { requireAuth, requireProfessional } = await import('./middleware/auth.js');
   requireAuth(req as any, res, () => {
     requireProfessional(req as any, res, async () => {
@@ -182,7 +184,7 @@ app.get('/portfolio', async (req, res) => {
 });
 
 // Reputation
-app.get('/subscribers/:id/reputation', async (req, res) => {
+apiRouter.get('/subscribers/:id/reputation', async (req, res) => {
   const { queryOne } = await import('./db/client.js');
   const rep = await queryOne(
     `SELECT rated_id as subscriber_id, ROUND(AVG(score)::numeric, 1) as avg_score,
@@ -194,7 +196,10 @@ app.get('/subscribers/:id/reputation', async (req, res) => {
   res.json(rep ?? { subscriber_id: req.params.id, avg_score: null, total_ratings: 0, total_deals: 0 });
 });
 
-// Health check
+// Mount all API routes under /api
+app.use('/api', apiRouter);
+
+// Health check (kept at root for infrastructure monitoring)
 app.get('/health', async (_req, res) => {
   try {
     await pool.query('SELECT 1');
