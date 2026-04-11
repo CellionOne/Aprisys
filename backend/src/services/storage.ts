@@ -11,13 +11,19 @@ function getClient(): Client {
 
 export async function uploadFile(key: string, buffer: Buffer, _mimeType: string): Promise<void> {
   const client = getClient();
-  await client.uploadFromBytes(key, buffer);
+  const result = await client.uploadFromBytes(key, buffer);
+  if (!result.ok) {
+    throw new Error(`Failed to upload file "${key}": ${String(result.error)}`);
+  }
 }
 
 export async function downloadFile(key: string): Promise<Buffer> {
   const client = getClient();
   const result = await client.downloadAsBytes(key);
-  return Buffer.from(result.value as unknown as ArrayBuffer);
+  if (!result.ok) {
+    throw new Error(`Failed to download file "${key}": ${String(result.error)}`);
+  }
+  return result.value[0];
 }
 
 export async function deleteFile(key: string): Promise<void> {
@@ -26,8 +32,6 @@ export async function deleteFile(key: string): Promise<void> {
 }
 
 export async function getSignedUrl(key: string): Promise<string> {
-  // Replit Object Storage doesn't have native signed URLs
-  // Route through our own download endpoint which validates auth
   return `${process.env.APP_URL}/storage/download?key=${encodeURIComponent(key)}`;
 }
 
