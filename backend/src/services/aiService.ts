@@ -2,11 +2,17 @@ import Anthropic from '@anthropic-ai/sdk';
 import { queryOne, query } from '../db/client.js';
 import { logEvent } from './audit.js';
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+let _client: Anthropic | null = null;
+function getClient(): Anthropic {
+  if (!_client) {
+    _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  }
+  return _client;
+}
 const MODEL = 'claude-sonnet-4-5';
 
 async function callClaude(system: string, userContent: string, maxTokens = 2048): Promise<string> {
-  const response = await client.messages.create({
+  const response = await getClient().messages.create({
     model: MODEL,
     max_tokens: maxTokens,
     system,

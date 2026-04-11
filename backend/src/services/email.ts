@@ -1,6 +1,13 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let _resend: Resend | null = null;
+function getResend(): Resend {
+  if (!_resend) {
+    _resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return _resend;
+}
+
 const FROM = process.env.EMAIL_FROM ?? 'Aprisys <noreply@aprisys.com>';
 const APP_URL = process.env.APP_URL ?? 'http://localhost:5000';
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
@@ -28,7 +35,7 @@ function wrap(content: string) {
 
 export async function sendVerificationEmail(email: string, name: string, token: string) {
   const url = `${APP_URL}/auth/verify-email?token=${token}`;
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM, to: email,
     subject: 'Verify your Aprisys account',
     html: wrap(`
@@ -41,7 +48,7 @@ export async function sendVerificationEmail(email: string, name: string, token: 
 
 export async function sendPasswordResetEmail(email: string, name: string, token: string) {
   const url = `${FRONTEND_URL}/auth/reset-password?token=${token}`;
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM, to: email,
     subject: 'Reset your Aprisys password',
     html: wrap(`
@@ -59,7 +66,7 @@ export async function sendKycSubmittedEmail(email: string, name: string, entity_
     fund_manager: '24 hours', corporate: '24 hours'
   };
   const timeline = timelines[entity_type] ?? '24 hours';
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM, to: email,
     subject: 'KYC documents received — Aprisys',
     html: wrap(`
@@ -81,7 +88,7 @@ export async function sendKycApprovedEmail(email: string, name: string, account_
     institutional: 'access all platform features including large-ticket deals and API access'
   };
   const access = accessMap[account_type] ?? 'access your verified account features';
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM, to: email,
     subject: 'Your account is verified — Aprisys',
     html: wrap(`
@@ -96,7 +103,7 @@ export async function sendKycApprovedEmail(email: string, name: string, account_
 
 export async function sendKycRejectedEmail(email: string, name: string, reason: string) {
   const resubmitUrl = `${FRONTEND_URL}/kyc`;
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM, to: email,
     subject: 'Action required: KYC verification — Aprisys',
     html: wrap(`
@@ -117,7 +124,7 @@ export async function sendDealInvitationEmail(
 ) {
   const acceptUrl = `${APP_URL}/deals/respond?token=${accept_token}&response=accepted`;
   const declineUrl = `${APP_URL}/deals/respond?token=${decline_token}&response=declined`;
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM, to: email,
     subject: `Deal invitation: ${deal.reference} — Aprisys`,
     html: wrap(`
@@ -139,7 +146,7 @@ export async function sendDealStatusEmail(
   email: string, name: string,
   deal_reference: string, status: string, message: string
 ) {
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM, to: email,
     subject: `Deal update: ${deal_reference} — Aprisys`,
     html: wrap(`
@@ -155,7 +162,7 @@ export async function sendDealStatusEmail(
 }
 
 export async function sendAccountSuspendedEmail(email: string, name: string, reason: string) {
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM, to: email,
     subject: 'Account suspended — Aprisys',
     html: wrap(`
@@ -175,7 +182,7 @@ export async function sendDigestEmail(opts: {
 }) {
   const trackingPixel = `${APP_URL}/digest/track/open/${opts.openToken}`;
   const unsubUrl = `${APP_URL}/digest/unsubscribe/${opts.unsubToken}`;
-  const result = await resend.emails.send({
+  const result = await getResend().emails.send({
     from: FROM, to: opts.email,
     subject: `Aprisys Market Digest — ${new Date(opts.date).toLocaleDateString('en-NG', { weekday: 'long', month: 'long', day: 'numeric' })}`,
     html: opts.digestHtml
