@@ -11,13 +11,13 @@ function getClient(): Client {
 
 export async function uploadFile(key: string, buffer: Buffer, mimeType: string): Promise<void> {
   const client = getClient();
-  await client.uploadFromBytes(key, buffer, { contentType: mimeType });
+  await (client as any).uploadFromBytes(key, buffer, { contentType: mimeType });
 }
 
 export async function downloadFile(key: string): Promise<Buffer> {
   const client = getClient();
   const result = await client.downloadAsBytes(key);
-  return Buffer.from(result.value!);
+  return Buffer.from(result.value as unknown as ArrayBuffer);
 }
 
 export async function deleteFile(key: string): Promise<void> {

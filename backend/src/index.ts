@@ -5,7 +5,6 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
 import { runMigration, pool } from './db/client.js';
 import { setupWebSocket } from './services/websocket.js';
@@ -206,8 +205,6 @@ app.get('/health', async (_req, res) => {
 });
 
 // ─── Frontend static files ───────────────────────────────────────────────────
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const distPath = path.join(__dirname, '../../frontend/dist');
 app.use(express.static(distPath));
 app.get('*', (_req, res) => {

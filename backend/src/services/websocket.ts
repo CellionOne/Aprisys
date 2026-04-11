@@ -5,13 +5,13 @@ import { Server } from 'http';
 import { query, queryOne } from '../db/client.js';
 import { logEvent } from '../services/audit.js';
 
-interface AuthenticatedSocket extends WebSocket {
+type AuthenticatedSocket = WebSocket & {
   subscriberId?: string;
   subscriberName?: string;
   accountType?: string;
   dealId?: string;
   isAdmin?: boolean;
-}
+};
 
 // Map of dealId -> Map of subscriberId -> socket
 const rooms = new Map<string, Map<string, AuthenticatedSocket>>();
