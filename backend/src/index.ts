@@ -4,6 +4,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 import { runMigration, pool } from './db/client.js';
 import { setupWebSocket } from './services/websocket.js';
@@ -201,6 +203,15 @@ app.get('/health', async (_req, res) => {
   } catch {
     res.status(503).json({ status: 'error', db: 'disconnected' });
   }
+});
+
+// ─── Frontend static files ───────────────────────────────────────────────────
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const distPath = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(distPath));
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(distPath, 'index.html'));
 });
 
 // ─── 404 + Error handlers ────────────────────────────────────────────────────
