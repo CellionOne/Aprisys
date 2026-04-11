@@ -207,8 +207,10 @@ app.get('/health', async (_req, res) => {
 // ─── Frontend static files ───────────────────────────────────────────────────
 const distPath = path.join(__dirname, '../../frontend/dist');
 app.use(express.static(distPath));
-app.get('*', (_req, res) => {
-  res.sendFile(path.join(distPath, 'index.html'));
+app.get('*', (_req, res, next) => {
+  res.sendFile(path.join(distPath, 'index.html'), (err) => {
+    if (err) next(err);
+  });
 });
 
 // ─── 404 + Error handlers ────────────────────────────────────────────────────
