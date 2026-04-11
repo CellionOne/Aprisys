@@ -71,6 +71,7 @@ export function RegisterPage() {
   const [accountType, setAccountType] = useState('retail');
   const [fields, setFields] = useState({ name: '', email: '', password: '', phone: '', consent: false });
   const [done, setDone] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -86,18 +87,23 @@ export function RegisterPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault(); setError(''); setLoading(true);
     try {
-      await apiFetch('/auth/register', { method: 'POST', body: JSON.stringify({ ...fields, account_type: accountType, consent: 'true' }), skipAuth: true });
+      const res = await apiFetch<{ message: string }>('/auth/register', { method: 'POST', body: JSON.stringify({ ...fields, account_type: accountType, consent: 'true' }), skipAuth: true });
+      setNeedsVerification(res.message?.includes('verify'));
       setDone(true);
     } catch (err: any) { setError(err.message); }
     finally { setLoading(false); }
   }
 
   if (done) return (
-    <AuthWrap title="Check your email" sub="">
+    <AuthWrap title={needsVerification ? 'Check your email' : 'Account created'} sub="">
       <div className="text-center py-4">
         <CheckCircle size={32} className="text-green-500 mx-auto mb-3" />
-        <p className="text-sm text-[#888] mb-5">We've sent a verification link to <strong>{fields.email}</strong>. Click it to activate your account.</p>
-        <Link to="/login" className="btn-secondary w-full">Back to sign in</Link>
+        {needsVerification ? (
+          <p className="text-sm text-[#888] mb-5">We've sent a verification link to <strong>{fields.email}</strong>. Click it to activate your account.</p>
+        ) : (
+          <p className="text-sm text-[#888] mb-5">Your account is ready. You can sign in now.</p>
+        )}
+        <Link to="/login" className="btn-secondary w-full">Sign in</Link>
       </div>
     </AuthWrap>
   );
