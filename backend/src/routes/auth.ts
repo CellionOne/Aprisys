@@ -260,7 +260,7 @@ router.post('/upgrade-to-qualified', requireAuth, async (req: Request, res: Resp
 router.get('/google', (_req, res) => {
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-    redirect_uri: `${process.env.APP_URL}/auth/google/callback`,
+    redirect_uri: `${process.env.APP_URL}/api/auth/google/callback`,
     response_type: 'code',
     scope: 'openid email profile',
     access_type: 'offline',
@@ -278,7 +278,7 @@ router.get('/google/callback', async (req: Request, res: Response) => {
       body: new URLSearchParams({
         code: code as string, client_id: process.env.GOOGLE_CLIENT_ID ?? '',
         client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-        redirect_uri: `${process.env.APP_URL}/auth/google/callback`, grant_type: 'authorization_code',
+        redirect_uri: `${process.env.APP_URL}/api/auth/google/callback`, grant_type: 'authorization_code',
       }),
     });
     const tokens = await tokenRes.json() as { access_token: string };

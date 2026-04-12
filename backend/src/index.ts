@@ -46,21 +46,19 @@ app.use('/api/webhooks', express.raw({ type: 'application/json' }), webhookRoute
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// ─── API routes (all prefixed /api for production SPA compatibility) ──────────
-const apiRouter = express.Router();
-
-apiRouter.use('/auth', authLimiter, authRouter);
-apiRouter.use('/kyc', apiLimiter, kycRouter);
-apiRouter.use('/deals', apiLimiter, dealsRouter);
-apiRouter.use('/escrow', apiLimiter, escrowRouter);
-apiRouter.use('/notifications', apiLimiter, notificationsRouter);
-apiRouter.use('/watchlist', apiLimiter, watchlistRouter);
-apiRouter.use('/digest', apiLimiter, digestRouter);
-apiRouter.use('/ai', aiLimiter, aiRouter);
-apiRouter.use('/admin', apiLimiter, adminRouter);
+// ─── API routes (flat /api/* mounts) ─────────────────────────────────────────
+app.use('/api/auth', authLimiter, authRouter);
+app.use('/api/kyc', apiLimiter, kycRouter);
+app.use('/api/deals', apiLimiter, dealsRouter);
+app.use('/api/escrow', apiLimiter, escrowRouter);
+app.use('/api/notifications', apiLimiter, notificationsRouter);
+app.use('/api/watchlist', apiLimiter, watchlistRouter);
+app.use('/api/digest', apiLimiter, digestRouter);
+app.use('/api/ai', aiLimiter, aiRouter);
+app.use('/api/admin', apiLimiter, adminRouter);
 
 // ─── Preferences ─────────────────────────────────────────────────────────────
-apiRouter.get('/preferences', async (req, res) => {
+app.get('/api/preferences', async (req, res) => {
   const { requireAuth } = await import('./middleware/auth.js');
   requireAuth(req as any, res, async () => {
     const { queryOne } = await import('./db/client.js');
@@ -69,7 +67,7 @@ apiRouter.get('/preferences', async (req, res) => {
   });
 });
 
-apiRouter.put('/preferences', async (req, res) => {
+app.put('/api/preferences', async (req, res) => {
   const { requireAuth } = await import('./middleware/auth.js');
   requireAuth(req as any, res, async () => {
     const { query } = await import('./db/client.js');
@@ -90,7 +88,7 @@ apiRouter.put('/preferences', async (req, res) => {
   });
 });
 
-apiRouter.put('/preferences/profile', async (req, res) => {
+app.put('/api/preferences/profile', async (req, res) => {
   const { requireAuth } = await import('./middleware/auth.js');
   requireAuth(req as any, res, async () => {
     const { query } = await import('./db/client.js');
@@ -104,7 +102,7 @@ apiRouter.put('/preferences/profile', async (req, res) => {
   });
 });
 
-apiRouter.post('/preferences/delete-account', async (req, res) => {
+app.post('/api/preferences/delete-account', async (req, res) => {
   const { requireAuth } = await import('./middleware/auth.js');
   requireAuth(req as any, res, async () => {
     const { query } = await import('./db/client.js');
@@ -116,8 +114,8 @@ apiRouter.post('/preferences/delete-account', async (req, res) => {
   });
 });
 
-// Subscriptions
-apiRouter.get('/subscriptions/me', async (req, res) => {
+// ─── Subscriptions ────────────────────────────────────────────────────────────
+app.get('/api/subscriptions/me', async (req, res) => {
   const { requireAuth } = await import('./middleware/auth.js');
   requireAuth(req as any, res, async () => {
     const { queryOne } = await import('./db/client.js');
@@ -126,7 +124,7 @@ apiRouter.get('/subscriptions/me', async (req, res) => {
   });
 });
 
-apiRouter.post('/subscriptions/checkout', async (req, res) => {
+app.post('/api/subscriptions/checkout', async (req, res) => {
   const { requireAuth } = await import('./middleware/auth.js');
   requireAuth(req as any, res, async () => {
     const { initializeTransaction } = await import('./services/paystack.js');
@@ -148,7 +146,7 @@ apiRouter.post('/subscriptions/checkout', async (req, res) => {
   });
 });
 
-apiRouter.post('/subscriptions/cancel', async (req, res) => {
+app.post('/api/subscriptions/cancel', async (req, res) => {
   const { requireAuth } = await import('./middleware/auth.js');
   requireAuth(req as any, res, async () => {
     const { queryOne, query } = await import('./db/client.js');
@@ -164,8 +162,8 @@ apiRouter.post('/subscriptions/cancel', async (req, res) => {
   });
 });
 
-// Portfolio
-apiRouter.get('/portfolio', async (req, res) => {
+// ─── Portfolio ────────────────────────────────────────────────────────────────
+app.get('/api/portfolio', async (req, res) => {
   const { requireAuth, requireProfessional } = await import('./middleware/auth.js');
   requireAuth(req as any, res, () => {
     requireProfessional(req as any, res, async () => {
@@ -186,8 +184,8 @@ apiRouter.get('/portfolio', async (req, res) => {
   });
 });
 
-// Reputation
-apiRouter.get('/subscribers/:id/reputation', async (req, res) => {
+// ─── Reputation ───────────────────────────────────────────────────────────────
+app.get('/api/subscribers/:id/reputation', async (req, res) => {
   const { queryOne } = await import('./db/client.js');
   const rep = await queryOne(
     `SELECT rated_id as subscriber_id, ROUND(AVG(score)::numeric, 1) as avg_score,
@@ -199,20 +197,19 @@ apiRouter.get('/subscribers/:id/reputation', async (req, res) => {
   res.json(rep ?? { subscriber_id: req.params.id, avg_score: null, total_ratings: 0, total_deals: 0 });
 });
 
-// Mount all API routes under /api
-app.use('/api', apiRouter);
-
-// Health check (kept at root for infrastructure monitoring)
-app.get('/health', async (_req, res) => {
+// ─── Health check (both paths for compatibility) ──────────────────────────────
+const healthHandler = async (_req: express.Request, res: express.Response) => {
   try {
     await pool.query('SELECT 1');
     res.json({ status: 'ok', version: '1.0.0', timestamp: new Date().toISOString(), db: 'connected' });
   } catch {
     res.status(503).json({ status: 'error', db: 'disconnected' });
   }
-});
+};
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
-// ─── Frontend static files ───────────────────────────────────────────────────
+// ─── Frontend static files (catch-all MUST come after all /api routes) ───────
 const distPath = path.join(__dirname, '../../frontend/dist');
 app.use(express.static(distPath));
 app.get('*', (_req, res, next) => {
@@ -221,8 +218,7 @@ app.get('*', (_req, res, next) => {
   });
 });
 
-// ─── 404 + Error handlers ────────────────────────────────────────────────────
-app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
+// ─── Error handler ────────────────────────────────────────────────────────────
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[Error]', err.message);
   res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message });

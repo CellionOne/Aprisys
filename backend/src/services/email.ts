@@ -34,7 +34,7 @@ function wrap(content: string) {
 }
 
 export async function sendVerificationEmail(email: string, name: string, token: string) {
-  const url = `${APP_URL}/auth/verify-email?token=${token}`;
+  const url = `${APP_URL}/api/auth/verify-email?token=${token}`;
   await getResend().emails.send({
     from: FROM, to: email,
     subject: 'Verify your Aprisys account',
@@ -195,8 +195,8 @@ export async function sendDigestEmail(opts: {
   email: string; name: string; digestHtml: string;
   openToken: string; unsubToken: string; date: string;
 }) {
-  const trackingPixel = `${APP_URL}/digest/track/open/${opts.openToken}`;
-  const unsubUrl = `${APP_URL}/digest/unsubscribe/${opts.unsubToken}`;
+  const trackingPixel = `${APP_URL}/api/digest/track/open/${opts.openToken}`;
+  const unsubUrl = `${APP_URL}/api/digest/unsubscribe/${opts.unsubToken}`;
   const result = await getResend().emails.send({
     from: FROM, to: opts.email,
     subject: `Aprisys Market Digest — ${new Date(opts.date).toLocaleDateString('en-NG', { weekday: 'long', month: 'long', day: 'numeric' })}`,
