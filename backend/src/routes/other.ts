@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
+import Anthropic from '@anthropic-ai/sdk';
 import { requireAuth, requireAdmin, requireProfessional } from '../middleware/auth.js';
 import { query, queryOne } from '../db/client.js';
 import { logEvent } from '../services/audit.js';
@@ -390,6 +391,126 @@ aiRouter.post('/negotiation-suggest', ...proMiddleware, async (req: Request, res
   } catch (err) { res.status(500).json({ error: 'AI service unavailable' }); }
 });
 
+const _getAnthropicClient = (() => {
+  let client: Anthropic | null = null;
+  return () => {
+    if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    return client;
+  };
+})();
+
+async function callClaudeDoc(system: string, userContent: string, maxTokens = 4096): Promise<string> {
+  const response = await _getAnthropicClient().messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: maxTokens,
+    system,
+    messages: [{ role: 'user', content: userContent }],
+  });
+  const content = response.content[0];
+  return content.type === 'text' ? content.text : '';
+}
+
+// POST /ai/generate-letter-of-offer
+aiRouter.post('/generate-letter-of-offer', ...proMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { deal_id } = req.body;
+    if (!deal_id) return res.status(400).json({ error: 'deal_id required' });
+    const deal = await queryOne<Record<string, unknown>>('SELECT * FROM cdi.deals WHERE id=$1', [deal_id]);
+    if (!deal) return res.status(404).json({ error: 'Deal not found' });
+    const parties = await query(
+      `SELECT dp.role, s.name, s.email, s.account_type FROM cdi.deal_parties dp JOIN digest.subscribers s ON s.id=dp.subscriber_id WHERE dp.deal_id=$1`,
+      [deal_id]
+    );
+    const doc = await callClaudeDoc(
+      `You are an expert Nigerian capital markets lawyer drafting documents for CDI (Capital Deals Interface). 
+       Produce a formal, professional Letter of Offer using Nigerian legal standards, SEC Nigeria guidelines, and FMDQ conventions where applicable. 
+       Use Nigerian Naira (₦) and reference relevant laws (CAMA 2020, ISA 2007, FMDQ Exchange Rules). 
+       Return plain text formatted as a formal legal document. No JSON, no markdown.`,
+      `Draft a Letter of Offer for this transaction:\n\nDeal Details: ${JSON.stringify(deal, null, 2)}\n\nParties: ${JSON.stringify(parties, null, 2)}`
+    );
+    await query(`UPDATE cdi.deals SET ai_documents=jsonb_set(COALESCE(ai_documents,'{}'), '{letter_of_offer}', $1::jsonb) WHERE id=$2`,
+      [JSON.stringify({ content: doc, generated_at: new Date().toISOString(), generated_by: req.subscriber!.id }), deal_id]);
+    await logEvent('ai.doc.generated', req.subscriber!.id, req.subscriber!.email, 'deal', deal_id, { doc_type: 'letter_of_offer' }, req);
+    res.json({ document: doc, doc_type: 'letter_of_offer' });
+  } catch (err) { res.status(500).json({ error: 'AI service unavailable' }); }
+});
+
+// POST /ai/generate-subscription-agreement
+aiRouter.post('/generate-subscription-agreement', ...proMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { deal_id } = req.body;
+    if (!deal_id) return res.status(400).json({ error: 'deal_id required' });
+    const deal = await queryOne<Record<string, unknown>>('SELECT * FROM cdi.deals WHERE id=$1', [deal_id]);
+    if (!deal) return res.status(404).json({ error: 'Deal not found' });
+    const parties = await query(
+      `SELECT dp.role, s.name, s.email, s.account_type FROM cdi.deal_parties dp JOIN digest.subscribers s ON s.id=dp.subscriber_id WHERE dp.deal_id=$1`,
+      [deal_id]
+    );
+    const doc = await callClaudeDoc(
+      `You are an expert Nigerian capital markets lawyer drafting documents for CDI (Capital Deals Interface). 
+       Produce a formal, professional Subscription Agreement using Nigerian legal standards, SEC Nigeria guidelines, and FMDQ conventions where applicable. 
+       Use Nigerian Naira (₦) and reference relevant laws (CAMA 2020, ISA 2007, FMDQ Exchange Rules). 
+       Return plain text formatted as a formal legal document. No JSON, no markdown.`,
+      `Draft a Subscription Agreement for this transaction:\n\nDeal Details: ${JSON.stringify(deal, null, 2)}\n\nParties: ${JSON.stringify(parties, null, 2)}`
+    );
+    await query(`UPDATE cdi.deals SET ai_documents=jsonb_set(COALESCE(ai_documents,'{}'), '{subscription_agreement}', $1::jsonb) WHERE id=$2`,
+      [JSON.stringify({ content: doc, generated_at: new Date().toISOString(), generated_by: req.subscriber!.id }), deal_id]);
+    await logEvent('ai.doc.generated', req.subscriber!.id, req.subscriber!.email, 'deal', deal_id, { doc_type: 'subscription_agreement' }, req);
+    res.json({ document: doc, doc_type: 'subscription_agreement' });
+  } catch (err) { res.status(500).json({ error: 'AI service unavailable' }); }
+});
+
+// POST /ai/generate-deed-of-assignment
+aiRouter.post('/generate-deed-of-assignment', ...proMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { deal_id } = req.body;
+    if (!deal_id) return res.status(400).json({ error: 'deal_id required' });
+    const deal = await queryOne<Record<string, unknown>>('SELECT * FROM cdi.deals WHERE id=$1', [deal_id]);
+    if (!deal) return res.status(404).json({ error: 'Deal not found' });
+    const parties = await query(
+      `SELECT dp.role, s.name, s.email, s.account_type FROM cdi.deal_parties dp JOIN digest.subscribers s ON s.id=dp.subscriber_id WHERE dp.deal_id=$1`,
+      [deal_id]
+    );
+    const doc = await callClaudeDoc(
+      `You are an expert Nigerian capital markets lawyer drafting documents for CDI (Capital Deals Interface). 
+       Produce a formal, professional Deed of Assignment using Nigerian legal standards, SEC Nigeria guidelines, and FMDQ conventions where applicable. 
+       Use Nigerian Naira (₦) and reference relevant laws (CAMA 2020, ISA 2007, Stamp Duties Act). 
+       Return plain text formatted as a formal legal document. No JSON, no markdown.`,
+      `Draft a Deed of Assignment for this transaction:\n\nDeal Details: ${JSON.stringify(deal, null, 2)}\n\nParties: ${JSON.stringify(parties, null, 2)}`
+    );
+    await query(`UPDATE cdi.deals SET ai_documents=jsonb_set(COALESCE(ai_documents,'{}'), '{deed_of_assignment}', $1::jsonb) WHERE id=$2`,
+      [JSON.stringify({ content: doc, generated_at: new Date().toISOString(), generated_by: req.subscriber!.id }), deal_id]);
+    await logEvent('ai.doc.generated', req.subscriber!.id, req.subscriber!.email, 'deal', deal_id, { doc_type: 'deed_of_assignment' }, req);
+    res.json({ document: doc, doc_type: 'deed_of_assignment' });
+  } catch (err) { res.status(500).json({ error: 'AI service unavailable' }); }
+});
+
+// POST /ai/generate-comfort-letter
+aiRouter.post('/generate-comfort-letter', ...proMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { deal_id } = req.body;
+    if (!deal_id) return res.status(400).json({ error: 'deal_id required' });
+    const deal = await queryOne<Record<string, unknown>>('SELECT * FROM cdi.deals WHERE id=$1', [deal_id]);
+    if (!deal) return res.status(404).json({ error: 'Deal not found' });
+    const parties = await query(
+      `SELECT dp.role, s.name, s.email, s.account_type FROM cdi.deal_parties dp JOIN digest.subscribers s ON s.id=dp.subscriber_id WHERE dp.deal_id=$1`,
+      [deal_id]
+    );
+    const doc = await callClaudeDoc(
+      `You are an expert Nigerian capital markets lawyer drafting documents for CDI (Capital Deals Interface). 
+       Produce a formal Comfort Letter (bank comfort letter confirming fund availability and legitimacy) using Nigerian banking standards and CBN guidelines. 
+       Use Nigerian Naira (₦) and reference relevant regulations (CBN Prudential Guidelines, BOFIA 2020). 
+       Return plain text formatted as a formal bank letter. No JSON, no markdown.`,
+      `Draft a Comfort Letter for this transaction:\n\nDeal Details: ${JSON.stringify(deal, null, 2)}\n\nParties: ${JSON.stringify(parties, null, 2)}`,
+      2048
+    );
+    await query(`UPDATE cdi.deals SET ai_documents=jsonb_set(COALESCE(ai_documents,'{}'), '{comfort_letter}', $1::jsonb) WHERE id=$2`,
+      [JSON.stringify({ content: doc, generated_at: new Date().toISOString(), generated_by: req.subscriber!.id }), deal_id]);
+    await logEvent('ai.doc.generated', req.subscriber!.id, req.subscriber!.email, 'deal', deal_id, { doc_type: 'comfort_letter' }, req);
+    res.json({ document: doc, doc_type: 'comfort_letter' });
+  } catch (err) { res.status(500).json({ error: 'AI service unavailable' }); }
+});
+
 // ─── ADMIN ROUTES ─────────────────────────────────────────────────────────────
 export const adminRouter = Router();
 adminRouter.use(requireAuth, requireAdmin);
@@ -568,4 +689,15 @@ adminRouter.get('/digest/stats', async (req: Request, res: Response) => {
     `SELECT channel, status, COUNT(*) as count FROM digest.deliveries WHERE digest_date=$1 GROUP BY channel, status`, [date]
   );
   res.json(stats);
+});
+
+adminRouter.post('/deals/:id/checklist/override', async (req: Request, res: Response) => {
+  const { reason } = req.body;
+  if (!reason) return res.status(400).json({ error: 'Reason required for checklist override' });
+  await query(
+    `UPDATE cdi.deals SET checklist_override=TRUE, checklist_override_by=$1, checklist_override_reason=$2 WHERE id=$3`,
+    [req.subscriber!.id, reason, req.params.id]
+  );
+  await logEvent('deal.checklist_override', req.subscriber!.id, req.subscriber!.email, 'deal', req.params.id, { reason }, req);
+  res.json({ message: 'Checklist override applied. Escrow funding is now permitted.' });
 });

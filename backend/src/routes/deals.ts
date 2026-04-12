@@ -6,6 +6,7 @@ import { createNotification } from '../services/notifications.js';
 import { scoreDealRisk, getMarketContext } from '../services/aiService.js';
 import { sendDealInvitationEmail } from '../services/email.js';
 import { v4 as uuidv4 } from 'uuid';
+import { getChecklist } from '../config/instrumentConfig.js';
 
 const router = Router();
 const proMiddleware = [requireAuth, requireProfessional, requireVerifiedKyc];
@@ -54,23 +55,31 @@ router.post('/', ...proMiddleware, async (req: Request, res: Response) => {
   const {
     title, deal_type, asset_ticker, asset_name, quantity, unit_price, total_value,
     conditions = [], expiry_at, visibility = 'private', commission_pct = 0,
-    required_signatories = 1, notes
+    required_signatories = 1, notes, deal_metadata = {}
   } = req.body;
 
   if (!title || !deal_type) return res.status(400).json({ error: 'title and deal_type are required' });
 
   const [deal] = await query<{ id: string; reference: string }>(
-    `INSERT INTO cdi.deals (created_by, title, deal_type, asset_ticker, asset_name, quantity, unit_price, total_value, conditions, expiry_at, visibility, commission_pct, required_signatories, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id, reference`,
+    `INSERT INTO cdi.deals (created_by, title, deal_type, asset_ticker, asset_name, quantity, unit_price, total_value, conditions, expiry_at, visibility, commission_pct, required_signatories, notes, deal_metadata)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id, reference`,
     [req.subscriber!.id, title, deal_type, asset_ticker ?? null, asset_name ?? null,
      quantity ?? null, unit_price ?? null, total_value ?? null,
-     JSON.stringify(conditions), expiry_at ?? null, visibility, commission_pct, required_signatories, notes ?? null]
+     JSON.stringify(conditions), expiry_at ?? null, visibility, commission_pct, required_signatories,
+     notes ?? null, JSON.stringify(deal_metadata)]
   );
 
   // Add creator as a party
   await query(
     `INSERT INTO cdi.deal_parties (deal_id, subscriber_id, role, status) VALUES ($1,$2,'creator','accepted')`,
     [deal.id, req.subscriber!.id]
+  );
+
+  // Generate and save regulatory checklist
+  const checklist = getChecklist(deal_type, req.subscriber!.account_type);
+  await query(
+    `UPDATE cdi.deals SET regulatory_checklist=$1 WHERE id=$2`,
+    [JSON.stringify(checklist), deal.id]
   );
 
   // Async risk scoring
@@ -83,13 +92,14 @@ router.post('/', ...proMiddleware, async (req: Request, res: Response) => {
   await logEvent('deal.created', req.subscriber!.id, req.subscriber!.email, 'deal', deal.id, { reference: deal.reference, deal_type }, req);
   await createNotification(req.subscriber!.id, 'deal_invited', 'Deal created', `Deal ${deal.reference} has been created.`, 'deal', deal.id);
 
-  res.status(201).json(deal);
+  res.status(201).json({ ...deal, regulatory_checklist: checklist });
 });
 
 // GET /deals/:id
 router.get('/:id', ...proMiddleware, async (req: Request, res: Response) => {
   const deal = await queryOne<Record<string, unknown>>(
-    `SELECT d.*, s.name as creator_name, s.kyc_status as creator_kyc_status
+    `SELECT d.*, s.name as creator_name, s.kyc_status as creator_kyc_status,
+            d.deal_metadata, d.regulatory_checklist, d.checklist_override, d.ai_documents
      FROM cdi.deals d JOIN digest.subscribers s ON s.id = d.created_by WHERE d.id=$1`,
     [req.params.id]
   );

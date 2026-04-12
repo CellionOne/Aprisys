@@ -6,6 +6,7 @@ import { logEvent } from '../services/audit.js';
 import { createNotification, createNotificationForDealParties } from '../services/notifications.js';
 import { initializeTransaction, verifyTransaction } from '../services/paystack.js';
 import { sendDealStatusEmail } from '../services/email.js';
+import { INSTRUMENT_CONFIG, DOC_LABELS } from '../config/instrumentConfig.js';
 
 export const escrowRouter = Router();
 const proMiddleware = [requireAuth, requireProfessional, requireVerifiedKyc];
@@ -13,12 +14,35 @@ const proMiddleware = [requireAuth, requireProfessional, requireVerifiedKyc];
 // POST /escrow/initialise
 escrowRouter.post('/initialise', ...proMiddleware, async (req: Request, res: Response) => {
   const { deal_id } = req.body;
-  const deal = await queryOne<{ id: string; total_value: number; status: string; reference: string }>(
-    'SELECT id, total_value, status, reference FROM cdi.deals WHERE id=$1', [deal_id]
+  const deal = await queryOne<{ id: string; total_value: number; status: string; reference: string; deal_type: string; checklist_override: boolean }>(
+    'SELECT id, total_value, status, reference, deal_type, checklist_override FROM cdi.deals WHERE id=$1', [deal_id]
   );
   if (!deal) return res.status(404).json({ error: 'Deal not found' });
   if (deal.status !== 'open') return res.status(400).json({ error: 'Deal must be open to fund escrow' });
   if (!deal.total_value) return res.status(400).json({ error: 'Deal has no total value set' });
+
+  // ─── Document checklist validation ────────────────────────────────────────
+  const uploadedDocs = await query<{ document_type: string }>(
+    'SELECT document_type FROM cdi.deal_documents WHERE deal_id=$1', [deal_id]
+  );
+  const uploadedTypes = uploadedDocs.map((d) => d.document_type);
+  const { mandatory_docs = [], escrow_hard_block_types = [] } = INSTRUMENT_CONFIG[deal.deal_type] ?? {};
+  const missingMandatory = mandatory_docs.filter((d: string) => !uploadedTypes.includes(d));
+  const isHardBlock = escrow_hard_block_types.includes(req.subscriber!.account_type);
+
+  if (missingMandatory.length > 0 && isHardBlock && !deal.checklist_override) {
+    return res.status(400).json({
+      error: 'Cannot fund escrow — mandatory documents missing',
+      missing_documents: missingMandatory.map((d: string) => DOC_LABELS[d]?.label ?? d),
+      message: 'Upload all mandatory documents before funding escrow. Contact an admin if you need an override.',
+    });
+  }
+
+  if (missingMandatory.length > 0 && !isHardBlock) {
+    await logEvent('escrow.checklist_warning', req.subscriber!.id, req.subscriber!.email, 'deal', deal_id,
+      { missing_docs: missingMandatory }, req);
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   const result = await initializeTransaction({
     email: req.subscriber!.email,

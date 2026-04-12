@@ -3,14 +3,23 @@ export type KycStatus = 'pending' | 'submitted' | 'under_review' | 'verified' | 
 export type AccountStatus = 'active' | 'suspended' | 'deleted';
 export type Plan = 'free' | 'standard' | 'pro' | 'broker' | 'institutional';
 export type SubscriptionStatus = 'active' | 'grace' | 'suspended' | 'cancelled';
-export type DealType = 'equity' | 'tbill' | 'bond' | 'private_placement' | 'off_market' | 'fixed_income';
+export type DealType =
+  | 'equity' | 'tbill' | 'bond' | 'private_placement' | 'off_market' | 'fixed_income'
+  | 'commercial_paper' | 'bankers_acceptance' | 'promissory_note' | 'reit_units'
+  | 'eurobond' | 'rights_nil_paid' | 'agri_commodity_forward' | 'sukuk'
+  | 'infrastructure_bond' | 'esos';
 export type DealStatus = 'draft' | 'open' | 'funded' | 'verified' | 'completed' | 'failed' | 'expired' | 'disputed';
 export type DealVisibility = 'private' | 'invite_only' | 'marketplace';
 export type PartyRole = 'creator' | 'buyer' | 'seller' | 'broker' | 'co_broker' | 'observer';
 export type PartyStatus = 'invited' | 'accepted' | 'declined' | 'removed';
 export type EscrowStatus = 'pending' | 'funded' | 'conditions_checking' | 'releasing' | 'released' | 'refunding' | 'refunded' | 'disputed' | 'failed';
 export type MessageType = 'text' | 'system' | 'ai_summary' | 'document' | 'terms_proposal';
-export type DocumentType = 'term_sheet' | 'agreement' | 'id_document' | 'board_resolution' | 'other';
+export type DocumentType =
+  | 'term_sheet' | 'agreement' | 'id_document' | 'board_resolution' | 'other'
+  | 'letter_of_offer' | 'subscription_agreement' | 'deed_of_assignment'
+  | 'comfort_letter' | 'information_memorandum' | 'programme_memorandum'
+  | 'dealer_agreement' | 'credit_rating' | 'regulatory_filing' | 'cscs_instruction'
+  | 'aml_declaration' | 'source_of_funds' | 'pep_declaration' | 'beneficial_ownership';
 export type NotificationType = 
   'kyc_approved' | 'kyc_rejected' | 'deal_invited' | 'deal_accepted' | 'deal_declined' |
   'deal_completed' | 'escrow_funded' | 'escrow_released' | 'escrow_disputed' |
