@@ -11,6 +11,10 @@ interface DigestData {
   signals: Array<{ id: string; ticker: string; headline: string; priority: string }>;
 }
 
+interface DigestPending {
+  message: string;
+}
+
 interface MarketPulse {
   asi: number;
   asi_change_pct: number;
@@ -21,6 +25,10 @@ interface MarketPulse {
   deals: number;
 }
 
+function isDigestData(d: DigestData | DigestPending): d is DigestData {
+  return 'market_snapshot' in d;
+}
+
 export function RetailDashboard() {
   const { subscriber, accessToken } = useAuth();
   const [digest, setDigest] = useState<DigestData | null>(null);
@@ -29,15 +37,16 @@ export function RetailDashboard() {
   const plan = subscriber?.plan ?? 'free';
 
   useEffect(() => {
-    apiFetch<DigestData>('/digest/today').then(d => {
-      if (d && (d as any).market_snapshot) setDigest(d);
-    }).catch(() => {}).finally(() => setLoading(false));
+    apiFetch<DigestData | DigestPending>('/digest/today')
+      .then(d => { if (isDigestData(d)) setDigest(d); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
     apiFetch<MarketPulse>('/digest/market-pulse').then(setMarketPulse).catch(() => {});
   }, [accessToken]);
 
+  const hasDigest = !!digest;
   const ms: Record<string, number> | null = digest?.market_snapshot ?? marketPulse ?? null;
   const up = (ms?.asi_change_pct ?? 0) >= 0;
-  const hasDigest = !!digest;
 
   const SnapshotCards = () => ms ? (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -94,7 +103,7 @@ export function RetailDashboard() {
 
           {!hasDigest && (
             <>
-              {plan === 'free' && !ms && (
+              {plan === 'free' && (
                 <div className="card mb-6 flex items-start gap-3">
                   <Info size={18} className="text-[#aaa] shrink-0 mt-0.5" />
                   <div>
