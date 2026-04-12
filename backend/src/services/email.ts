@@ -161,6 +161,21 @@ export async function sendDealStatusEmail(
   });
 }
 
+export async function sendKycBiometricInviteEmail(email: string, name: string, inviteUrl: string) {
+  await getResend().emails.send({
+    from: FROM, to: email,
+    subject: 'Complete your Aprisys identity verification',
+    html: wrap(`
+      <h1 style="font-size:22px;font-weight:600;margin:0 0 8px;color:#1a1a1a">Biometric verification required</h1>
+      <p style="color:#555;margin:0 0 16px;line-height:1.6">Hi ${name}, your initial identity checks have passed. To complete verification and access the deals platform, you need to complete a short biometric check.</p>
+      <div style="background:#f8f7f4;border-radius:8px;padding:16px;margin-bottom:24px">
+        <p style="margin:0;font-size:14px;color:#555">This takes approximately <strong>2–3 minutes</strong> and requires a government-issued ID and a brief selfie video.</p>
+      </div>
+      <a href="${inviteUrl}" style="display:inline-block;background:#1a1a1a;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:15px;font-weight:500">Start verification</a>
+      <p style="margin:24px 0 0;font-size:13px;color:#aaa">This link is unique to your account. Do not share it. If you have any questions, contact support@aprisys.com</p>`)
+  });
+}
+
 export async function sendAccountSuspendedEmail(email: string, name: string, reason: string) {
   await getResend().emails.send({
     from: FROM, to: email,

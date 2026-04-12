@@ -5,7 +5,8 @@ import { query, queryOne } from '../db/client.js';
 import { logEvent } from '../services/audit.js';
 import { createNotification } from '../services/notifications.js';
 import { uploadFile, downloadFile, buildStorageKey } from '../services/storage.js';
-import { sendKycSubmittedEmail, sendKycApprovedEmail, sendKycRejectedEmail, sendAccountSuspendedEmail } from '../services/email.js';
+import { sendKycSubmittedEmail, sendKycApprovedEmail, sendKycRejectedEmail, sendAccountSuspendedEmail, sendKycBiometricInviteEmail } from '../services/email.js';
+import { verifyBVN, verifyNIN, verifyCAC, createKYCSession } from '../services/cellionService.js';
 import { getDealStructure, generateTermSheet, scoreDealRisk, matchCounterparties, summariseDealRoom, analyseDocument, getMarketContext, getNegotiationSuggestion } from '../services/aiService.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -25,30 +26,150 @@ kycRouter.post('/upload-document', requireAuth, upload.single('file'), async (re
 });
 
 kycRouter.post('/submit', requireAuth, async (req: Request, res: Response) => {
-  const { entity_type, nin, bvn, cac_number, tin, sec_licence, ngx_membership, cscs_code, net_worth_declaration, investment_experience, documents = [] } = req.body;
+  const { entity_type, nin, bvn, cac_number, tin, sec_licence, ngx_membership, cscs_code,
+          net_worth_declaration, investment_experience, date_of_birth, documents = [] } = req.body;
 
-  const existing = await queryOne<{ id: string; version: number }>('SELECT id, version FROM digest.kyc_records WHERE subscriber_id=$1 ORDER BY version DESC LIMIT 1', [req.subscriber!.id]);
+  const sub = req.subscriber!;
+  const nameParts = sub.name.trim().split(/\s+/);
+  const firstName = nameParts[0];
+  const lastName = nameParts.slice(1).join(' ') || nameParts[0];
 
+  const existing = await queryOne<{ id: string; version: number }>(
+    'SELECT id, version FROM digest.kyc_records WHERE subscriber_id=$1 ORDER BY version DESC LIMIT 1',
+    [sub.id]
+  );
+
+  let kycId: string;
   if (existing) {
     await query(
       `UPDATE digest.kyc_records SET entity_type=$1, nin=$2, bvn=$3, cac_number=$4, tin=$5, sec_licence=$6,
        ngx_membership=$7, cscs_code=$8, net_worth_declaration=$9, investment_experience=$10,
-       documents=$11, status='submitted', submitted_at=NOW() WHERE id=$12`,
-      [entity_type, nin, bvn, cac_number, tin, sec_licence, ngx_membership, cscs_code, net_worth_declaration, investment_experience, JSON.stringify(documents), existing.id]
+       documents=$11, status='submitted', submitted_at=NOW(), review_notes=NULL, rejection_reason=NULL WHERE id=$12`,
+      [entity_type, nin, bvn, cac_number, tin, sec_licence, ngx_membership, cscs_code,
+       net_worth_declaration, investment_experience, JSON.stringify(documents), existing.id]
     );
+    kycId = existing.id;
   } else {
-    await query(
-      `INSERT INTO digest.kyc_records (subscriber_id, entity_type, nin, bvn, cac_number, tin, sec_licence, ngx_membership, cscs_code, net_worth_declaration, investment_experience, documents, status, submitted_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'submitted',NOW())`,
-      [req.subscriber!.id, entity_type, nin, bvn, cac_number, tin, sec_licence, ngx_membership, cscs_code, net_worth_declaration, investment_experience, JSON.stringify(documents)]
+    const [inserted] = await query<{ id: string }>(
+      `INSERT INTO digest.kyc_records (subscriber_id, entity_type, nin, bvn, cac_number, tin, sec_licence,
+       ngx_membership, cscs_code, net_worth_declaration, investment_experience, documents, status, submitted_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'submitted',NOW()) RETURNING id`,
+      [sub.id, entity_type, nin, bvn, cac_number, tin, sec_licence, ngx_membership, cscs_code,
+       net_worth_declaration, investment_experience, JSON.stringify(documents)]
     );
+    kycId = inserted.id;
   }
 
-  await query(`UPDATE digest.subscribers SET kyc_status='submitted' WHERE id=$1`, [req.subscriber!.id]);
-  await sendKycSubmittedEmail(req.subscriber!.email, req.subscriber!.name, entity_type);
-  await logEvent('kyc.submitted', req.subscriber!.id, req.subscriber!.email, 'kyc', req.subscriber!.id, { entity_type }, req);
+  await query(`UPDATE digest.subscribers SET kyc_status='submitted' WHERE id=$1`, [sub.id]);
+  await logEvent('kyc.submitted', sub.id, sub.email, 'kyc', kycId, { entity_type }, req);
 
-  res.json({ message: 'KYC submitted for review' });
+  // ─── Cellion auto-verification ────────────────────────────────────────────
+  const isCellionEnabled = !!process.env.CELLION_API_KEY;
+  if (!isCellionEnabled) {
+    console.log('[KYC] CELLION_API_KEY not set — skipping auto-verification for', sub.email);
+    await sendKycSubmittedEmail(sub.email, sub.name, entity_type);
+    return res.json({ message: 'KYC submitted for review' });
+  }
+
+  try {
+    if (['individual', 'qualified_individual'].includes(entity_type)) {
+      // BVN + NIN auto-verify
+      const [bvnResult, ninResult] = await Promise.all([
+        bvn ? verifyBVN(bvn, firstName, lastName, date_of_birth, sub.id) : Promise.resolve({ verified: false }),
+        nin ? verifyNIN(nin, firstName, lastName, date_of_birth, sub.id) : Promise.resolve({ verified: false }),
+      ]);
+
+      if (bvnResult.verified && ninResult.verified) {
+        await query(
+          `UPDATE digest.kyc_records SET status='verified', verified_at=NOW(),
+           review_notes='Auto-verified via Cellion BVN/NIN check' WHERE id=$1`,
+          [kycId]
+        );
+        await query(`UPDATE digest.subscribers SET kyc_status='verified' WHERE id=$1`, [sub.id]);
+        try { await sendKycApprovedEmail(sub.email, sub.name, sub.account_type); } catch (_) {}
+        await createNotification(sub.id, 'kyc_approved', 'Account verified',
+          'Your identity has been automatically verified. You can now access your account features.', 'kyc', kycId);
+        await logEvent('kyc.auto_verified', sub.id, sub.email, 'kyc', kycId, { method: 'bvn_nin', entity_type }, req);
+        return res.json({ message: 'KYC submitted and automatically verified' });
+      } else {
+        const note = `auto_verify_failed: BVN=${bvnResult.verified}, NIN=${ninResult.verified}`;
+        await query(`UPDATE digest.kyc_records SET review_notes=$1 WHERE id=$2`, [note, kycId]);
+        try { await sendKycSubmittedEmail(sub.email, sub.name, entity_type); } catch (_) {}
+        return res.json({ message: 'KYC submitted for review' });
+      }
+    }
+
+    if (['corporate', 'institutional'].includes(entity_type)) {
+      // CAC auto-verify
+      const cacResult = await verifyCAC(cac_number, entity_type, sub.id);
+      const cacIsActive = cacResult.companyStatus?.toUpperCase() === 'ACTIVE';
+
+      const cacDocEntry = {
+        document_label: 'CAC Registry Verification',
+        verified_at: new Date().toISOString(),
+        data: cacResult,
+      };
+      const currentDocs = documents as unknown[];
+      const updatedDocs = [...currentDocs, cacDocEntry];
+      await query(`UPDATE digest.kyc_records SET documents=$1 WHERE id=$2`, [JSON.stringify(updatedDocs), kycId]);
+
+      if (cacIsActive) {
+        await query(
+          `UPDATE digest.kyc_records SET status='verified', verified_at=NOW(),
+           review_notes='Auto-verified via Cellion CAC lookup' WHERE id=$1`,
+          [kycId]
+        );
+        await query(`UPDATE digest.subscribers SET kyc_status='verified' WHERE id=$1`, [sub.id]);
+        try { await sendKycApprovedEmail(sub.email, sub.name, sub.account_type); } catch (_) {}
+        await createNotification(sub.id, 'kyc_approved', 'Business verified',
+          'Your company has been verified. You can now access the platform.', 'kyc', kycId);
+        await logEvent('kyc.auto_verified', sub.id, sub.email, 'kyc', kycId, { method: 'cac', entity_type, companyStatus: cacResult.companyStatus }, req);
+        return res.json({ message: 'KYC submitted and business automatically verified' });
+      } else {
+        const note = `auto_verify_failed: CAC status=${cacResult.companyStatus ?? 'unknown'}`;
+        await query(`UPDATE digest.kyc_records SET review_notes=$1 WHERE id=$2`, [note, kycId]);
+        try { await sendKycSubmittedEmail(sub.email, sub.name, entity_type); } catch (_) {}
+        return res.json({ message: 'KYC submitted for review' });
+      }
+    }
+
+    if (['stockbroker', 'fund_manager'].includes(entity_type)) {
+      // BVN + NIN, then create biometric session
+      const [bvnResult, ninResult] = await Promise.all([
+        bvn ? verifyBVN(bvn, firstName, lastName, date_of_birth, sub.id) : Promise.resolve({ verified: false }),
+        nin ? verifyNIN(nin, firstName, lastName, date_of_birth, sub.id) : Promise.resolve({ verified: false }),
+      ]);
+
+      if (bvnResult.verified && ninResult.verified) {
+        try {
+          const session = await createKYCSession(sub.email, sub.name, sub.phone ?? undefined, undefined, sub.id);
+          const note = `biometric_session_created: requestId=${session.requestId}`;
+          await query(`UPDATE digest.kyc_records SET review_notes=$1 WHERE id=$2`, [note, kycId]);
+          try { await sendKycBiometricInviteEmail(sub.email, sub.name, session.inviteUrl); } catch (_) {}
+          await logEvent('kyc.biometric_session_created', sub.id, sub.email, 'kyc', kycId,
+            { requestId: session.requestId, entity_type }, req);
+        } catch (sessionErr) {
+          console.error('[KYC] Failed to create biometric session:', sessionErr);
+          const note = `auto_verify_partial: BVN/NIN passed but biometric session creation failed`;
+          await query(`UPDATE digest.kyc_records SET review_notes=$1 WHERE id=$2`, [note, kycId]);
+        }
+      } else {
+        const note = `auto_verify_failed: BVN=${bvnResult.verified}, NIN=${ninResult.verified}`;
+        await query(`UPDATE digest.kyc_records SET review_notes=$1 WHERE id=$2`, [note, kycId]);
+      }
+      try { await sendKycSubmittedEmail(sub.email, sub.name, entity_type); } catch (_) {}
+      return res.json({ message: 'KYC submitted for review' });
+    }
+
+    // Default — no auto-verify for this type
+    await sendKycSubmittedEmail(sub.email, sub.name, entity_type);
+    res.json({ message: 'KYC submitted for review' });
+
+  } catch (autoVerifyErr) {
+    console.error('[KYC] Auto-verification error (non-fatal):', autoVerifyErr);
+    try { await sendKycSubmittedEmail(sub.email, sub.name, entity_type); } catch (_) {}
+    res.json({ message: 'KYC submitted for review' });
+  }
 });
 
 kycRouter.put('/resubmit', requireAuth, async (req: Request, res: Response) => {

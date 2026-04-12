@@ -1,0 +1,80 @@
+Add Cellion One KYC and KYB verification to the app. The API key is already stored as CELLION_API_KEY in Replit secrets.
+1. Create backend/src/services/cellionService.ts
+This service wraps the Cellion One KYC and KYB APIs:
+Base URLs:
+
+KYC: https://cellionone.com/api/v1/kyc
+KYB: https://cellionone.com/api/v1/kyb
+
+Authentication: X-API-Key header using process.env.CELLION_API_KEY
+Build these functions:
+verifyBVN(idNumber, firstName, lastName, dateOfBirth) 
+  → POST /api/v1/kyc/lookup/bvn
+  → returns { verified: boolean, fullName, referenceId }
+
+verifyNIN(idNumber, firstName, lastName, dateOfBirth)
+  → POST /api/v1/kyc/lookup/nin
+  → same response shape as BVN
+
+createKYCSession(subjectEmail, subjectName, subjectPhone, templateId?)
+  → POST /api/v1/kyc/requests
+  → returns { requestId, inviteUrl }
+
+getKYCSession(requestId)
+  → GET /api/v1/kyc/requests/:requestId
+  → returns full session record
+
+verifyCAC(rcNumber, businessType?)
+  → POST /api/v1/kyb/lookup
+  → returns { status, companyName, companyStatus, directors, reference }
+All functions should be lazy-initialised (read API key at call time, not module load time). Log all calls to the audit table with event type cellion.kyc or cellion.kyb.
+
+2. Update the KYC submit route in backend/src/routes/other.ts
+After saving the KYC record, run automatic verification based on account type:
+For individual and qualified_individual entity types:
+
+Call verifyBVN and verifyNIN using the submitted nin, bvn, and subscriber name
+If both return verified: true → update subscriber kyc_status to verified, update kyc_record status to verified, set verified_at to now
+If either fails → keep status as submitted, add a note auto_verify_failed to review_notes so admin knows manual review is needed
+Send KYC approved email if auto-verified, otherwise send KYC submitted email as before
+
+For corporate and institutional entity types:
+
+Call verifyCAC using the submitted cac_number
+If companyStatus is ACTIVE → update subscriber kyc_status to verified, update kyc_record status to verified
+If not active or not found → keep as submitted for manual admin review
+Store the full CAC response in the kyc_record documents JSONB field as an additional entry with document_label: "CAC Registry Verification"
+
+For stockbroker and fund_manager entity types:
+
+Call verifyBVN and verifyNIN as above
+If both pass → create a full KYC session via createKYCSession and send the inviteUrl to the subscriber by email with subject "Complete your Aprisys identity verification" and body explaining they need to complete biometric verification to access the deals platform
+Update kyc_record review_notes with the requestId so admin can track it
+Keep kyc_status as submitted until the webhook confirms completion
+
+
+3. Add Cellion webhook endpoint to backend/src/routes/webhooks.ts
+Add POST /webhooks/cellion:
+
+Verify the X-Cellion-Signature HMAC-SHA256 signature using process.env.CELLION_WEBHOOK_SECRET
+Parse the event body
+Handle verification.completed event:
+
+Find the kyc_record where review_notes contains the requestId
+If status is verified → update subscriber kyc_status to verified, update kyc_record status to verified, send KYC approved email, create notification kyc_approved
+If status is failed → update kyc_record status to rejected, set rejection_reason to the webhook result, send KYC rejected email
+
+
+Log to audit table as webhook.cellion
+Always return 200 to acknowledge receipt
+
+
+4. Add CELLION_WEBHOOK_SECRET to the secrets used
+The webhook secret will be provided separately. For now add a placeholder check — if CELLION_WEBHOOK_SECRET is not set, log a warning but still process the webhook (for testing).
+
+5. After making all changes:
+
+Rebuild the backend with npm run build from the /workspace/backend directory
+Restart the app
+Test by hitting GET /health to confirm it starts correctly
+Commit all changes to GitHub with message feat: Cellion One KYC and KYB auto-verification
