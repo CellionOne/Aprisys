@@ -377,6 +377,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_created ON audit.events(created_at DESC);
 INSERT INTO public.cie_securities (ticker, name, sector) VALUES
 ('DANGCEM','Dangote Cement Plc','Building Materials'),
 ('GTCO','Guaranty Trust Holding Co','Banking'),
+('GTBANK','Guaranty Trust Holding Co','Banking'),
 ('ZENITHBANK','Zenith Bank Plc','Banking'),
 ('MTNN','MTN Nigeria Communications','Telecoms'),
 ('SEPLAT','Seplat Energy Plc','Oil & Gas'),
@@ -389,7 +390,17 @@ INSERT INTO public.cie_securities (ticker, name, sector) VALUES
 ('TOTALENERGIES','TotalEnergies Marketing Nigeria','Oil & Gas'),
 ('FLOURMILL','Flour Mills of Nigeria','Consumer Goods'),
 ('PRESCO','Presco Plc','Agriculture'),
-('GEREGU','Geregu Power Plc','Power')
+('GEREGU','Geregu Power Plc','Power'),
+('WAPCO','Lafarge Africa Plc','Building Materials'),
+('FIDSON','Fidson Healthcare Plc','Healthcare'),
+('GUINNESS','Guinness Nigeria Plc','Beverages'),
+('NASCON','NASCON Allied Industries','Consumer Goods'),
+('UACN','UAC of Nigeria Plc','Conglomerates'),
+('BERGER','Berger Paints Nigeria','Building Materials'),
+('OKOMUOIL','Okomu Oil Palm Plc','Agriculture'),
+('TRANSCORP','Transcorp Plc','Conglomerates'),
+('UCAP','United Capital Plc','Financial Services'),
+('FIDELITYBK','Fidelity Bank Plc','Banking')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO public.cie_market_pulse (trade_date, asi, asi_change, asi_change_pct, advancing, declining, unchanged, turnover, volume, deals, commentary)
@@ -399,7 +410,7 @@ ON CONFLICT DO NOTHING;
 
 DO $$
 DECLARE
-  tickers TEXT[] := ARRAY['DANGCEM','GTCO','ZENITHBANK','MTNN','SEPLAT','NESTLE','BUACEMENT','ACCESSCORP','FBNH','AIRTELAFRI'];
+  tickers TEXT[] := ARRAY['DANGCEM','GTCO','GTBANK','ZENITHBANK','MTNN','SEPLAT','NESTLE','BUACEMENT','ACCESSCORP','FBNH','AIRTELAFRI','STANBIC','TOTALENERGIES','FLOURMILL','PRESCO','GEREGU','WAPCO','FIDSON','GUINNESS','NASCON','UACN','BERGER','OKOMUOIL','TRANSCORP','UCAP','FIDELITYBK'];
   t TEXT;
   d INTEGER;
   base_ias NUMERIC;

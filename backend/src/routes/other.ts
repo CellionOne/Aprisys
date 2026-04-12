@@ -273,6 +273,14 @@ watchlistRouter.delete('/:ticker', requireAuth, async (req: Request, res: Respon
 // ─── DIGEST ───────────────────────────────────────────────────────────────────
 export const digestRouter = Router();
 
+digestRouter.get('/market-pulse', async (_req: Request, res: Response) => {
+  const pulse = await queryOne(
+    'SELECT * FROM public.cie_market_pulse ORDER BY trade_date DESC LIMIT 1'
+  );
+  if (!pulse) return res.json(null);
+  res.json(pulse);
+});
+
 digestRouter.get('/today', requireAuth, async (req: Request, res: Response) => {
   const today = new Date().toISOString().split('T')[0];
   const archive = await queryOne('SELECT * FROM digest.archive WHERE digest_date=$1', [today]);

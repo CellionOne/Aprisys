@@ -112,7 +112,10 @@ export function CreateDealPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="mb-6"><h1 className="text-2xl font-semibold text-white">New deal</h1></div>
+      <div className="mb-6 flex items-center gap-4">
+        <Link to="/deals" className="text-sm text-[#555] hover:text-white flex items-center gap-1">← Back to deals</Link>
+        <h1 className="text-2xl font-semibold text-white">New deal</h1>
+      </div>
       <div className="grid md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-5">
           {/* AI Assist */}

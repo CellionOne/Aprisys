@@ -17,7 +17,7 @@ export default function RetailShell() {
   const nav = [
     { to: '/retail/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/retail/digest', icon: Newspaper, label: "Today's digest" },
-    { to: '/retail/archive', icon: Archive, label: 'Archive', locked: subscriber?.plan === 'free' },
+    { to: '/retail/archive', icon: Archive, label: 'Archive' },
     { to: '/retail/watchlist', icon: Star, label: 'Watchlist' },
     { to: '/retail/billing', icon: CreditCard, label: 'Billing' },
     { to: '/retail/settings', icon: Settings, label: 'Settings' },

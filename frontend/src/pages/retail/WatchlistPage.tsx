@@ -198,6 +198,7 @@ export function SettingsPage() {
             <select className="input" value={prefs.delivery_time} onChange={e => setPrefs((p: any) => ({ ...p, delivery_time: e.target.value }))}>
               <option value="07:30">7:30 AM</option><option value="12:00">12:00 PM</option><option value="19:30">7:30 PM</option>
             </select>
+            <p className="text-xs text-[#888] mt-1">Daily digest is generated at 7:30pm WAT. Morning delivery shows the previous evening's digest.</p>
           </div>
           <button onClick={savePrefs} className="btn-primary" disabled={saving}>{saved ? 'Saved!' : 'Save preferences'}</button>
         </div>

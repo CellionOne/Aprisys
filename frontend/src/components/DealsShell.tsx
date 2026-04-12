@@ -12,7 +12,7 @@ export default function DealsShell() {
     { to: '/deals/marketplace', icon: Globe, label: 'Marketplace' },
     { to: '/deals/new', icon: LayoutDashboard, label: 'New deal' },
     { to: '/deals/portfolio', icon: BarChart2, label: 'Portfolio' },
-    { to: '/retail/dashboard', icon: TrendingUp, label: 'Market digest' },
+    { to: '/retail/dashboard', icon: TrendingUp, label: '← Market digest' },
   ];
 
   const adminNav = [

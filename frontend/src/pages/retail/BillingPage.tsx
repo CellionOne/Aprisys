@@ -27,7 +27,13 @@ export function BillingPage() {
     try {
       const res = await apiFetch<{ authorization_url: string }>('/subscriptions/checkout', { method: 'POST', body: JSON.stringify({ plan: targetPlan }) });
       window.location.href = res.authorization_url;
-    } catch (err) { alert((err as Error).message); }
+    } catch (err) {
+      const msg = (err as Error).message ?? '';
+      const friendly = msg.toLowerCase().includes('paystack') || msg.toLowerCase().includes('plan') || msg.toLowerCase().includes('invalid')
+        ? 'Subscription payments are not yet active. Please contact support@aprisys.com to upgrade.'
+        : msg;
+      alert(friendly);
+    }
     finally { setCheckoutLoading(null); }
   }
 
