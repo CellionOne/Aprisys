@@ -84,7 +84,7 @@ export function DigestPage() {
   if (!digest?.market_snapshot) return <div className="max-w-3xl mx-auto"><div className="card text-center py-12"><p className="text-[#888] text-sm">Today's digest hasn't been composed yet. Check back after 7:30pm WAT.</p></div></div>;
 
   const ms = digest.market_snapshot;
-  const up = (ms?.asi_change_pct ?? 0) >= 0;
+  const up = Number(ms?.asi_change_pct ?? 0) >= 0;
 
   return (
     <div className="max-w-3xl mx-auto space-y-5">
@@ -92,8 +92,8 @@ export function DigestPage() {
       <div className="card">
         <p className="label mb-3">Market snapshot</p>
         <p className="text-2xl font-bold">{(ms.asi ?? 0).toLocaleString('en-NG', { maximumFractionDigits: 2 })}</p>
-        <p className={`text-sm mt-1 ${up ? 'text-green-600' : 'text-red-600'}`}>{up ? '▲' : '▼'} {Math.abs(ms.asi_change_pct ?? 0).toFixed(2)}%</p>
-        <p className="text-xs text-[#888] mt-2">Advancing: {ms.advancing} · Declining: {ms.declining} · Turnover: ₦{((ms.turnover ?? 0)/1e9).toFixed(2)}B</p>
+        <p className={`text-sm mt-1 ${up ? 'text-green-600' : 'text-red-600'}`}>{up ? '▲' : '▼'} {Math.abs(Number(ms.asi_change_pct ?? 0)).toFixed(2)}%</p>
+        <p className="text-xs text-[#888] mt-2">Advancing: {ms.advancing} · Declining: {ms.declining} · Turnover: ₦{(Number(ms.turnover ?? 0)/1e9).toFixed(2)}B</p>
       </div>
       {plan !== 'free' && digest.ai_commentary && (
         <div className="card"><p className="label mb-3">AI commentary</p><p className="text-sm text-[#333] leading-7">{digest.ai_commentary}</p><p className="text-xs text-[#bbb] mt-3 italic">Not investment advice</p></div>
@@ -106,7 +106,7 @@ export function DigestPage() {
               <span className="text-xs text-[#ccc] w-5">{i + 1}</span>
               <div className="flex-1 min-w-0"><p className="text-sm font-medium">{s.ticker}</p><p className="text-xs text-[#aaa] truncate">{s.name}</p></div>
               <div className="text-right"><p className="text-sm font-semibold">{s.ias?.toFixed(1)}</p><p className="text-xs text-[#aaa]">IAS</p></div>
-              <div className="text-right w-20"><p className="text-sm">₦{s.close?.toFixed(2)}</p><p className={`text-xs ${(s.change_pct ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{(s.change_pct ?? 0) >= 0 ? '+' : ''}{(s.change_pct ?? 0).toFixed(2)}%</p></div>
+              <div className="text-right w-20"><p className="text-sm">₦{Number(s.close ?? 0).toFixed(2)}</p><p className={`text-xs ${Number(s.change_pct ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{Number(s.change_pct ?? 0) >= 0 ? '+' : ''}{Number(s.change_pct ?? 0).toFixed(2)}%</p></div>
             </div>
           ))}
         </div>
@@ -135,7 +135,7 @@ export function ArchivePage() {
           {entries.map((e: any) => (
             <div key={e.digest_date} className="flex items-center py-3.5 gap-4">
               <div className="flex-1"><p className="text-sm font-medium">{new Date(e.digest_date).toLocaleDateString('en-NG', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' })}</p></div>
-              <p className={`text-sm ${(e.asi_change_pct ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{(e.asi_change_pct ?? 0) >= 0 ? '▲' : '▼'} {Math.abs(e.asi_change_pct ?? 0).toFixed(2)}%</p>
+              <p className={`text-sm ${Number(e.asi_change_pct ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{Number(e.asi_change_pct ?? 0) >= 0 ? '▲' : '▼'} {Math.abs(Number(e.asi_change_pct ?? 0)).toFixed(2)}%</p>
             </div>
           ))}
         </div>

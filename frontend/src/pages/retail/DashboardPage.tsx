@@ -46,16 +46,16 @@ export function RetailDashboard() {
 
   const hasDigest = !!digest;
   const ms: Record<string, number> | null = digest?.market_snapshot ?? marketPulse ?? null;
-  const up = (ms?.asi_change_pct ?? 0) >= 0;
+  const up = Number(ms?.asi_change_pct ?? 0) >= 0;
 
   const SnapshotCards = () => ms ? (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
       <div className="card">
         <p className="label">All-Share Index</p>
-        <p className="text-xl font-semibold">{(ms.asi ?? 0).toLocaleString('en-NG', { maximumFractionDigits: 2 })}</p>
+        <p className="text-xl font-semibold">{Number(ms.asi ?? 0).toLocaleString('en-NG', { maximumFractionDigits: 2 })}</p>
         <p className={`text-xs mt-1 flex items-center gap-1 ${up ? 'text-green-600' : 'text-red-600'}`}>
           {up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-          {up ? '+' : ''}{(ms.asi_change_pct ?? 0).toFixed(2)}%
+          {up ? '+' : ''}{Number(ms.asi_change_pct ?? 0).toFixed(2)}%
         </p>
       </div>
       <div className="card">
