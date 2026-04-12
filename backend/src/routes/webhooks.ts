@@ -68,11 +68,13 @@ router.post('/paystack', async (req: Request, res: Response) => {
         const { customer, subscription_code, plan, email_token, next_payment_date } = event.data;
         const sub = await getSubByEmail(customer.email);
         if (sub) {
-          const planNameMap: Record<string, string> = {
-            standard: 'standard', pro: 'pro', broker: 'broker', institutional: 'institutional',
-          };
           const rawName = (plan?.name ?? '').toLowerCase().trim();
-          const resolvedPlan = planNameMap[rawName] ?? 'free';
+          const resolvedPlan =
+            rawName.includes('institutional') ? 'institutional' :
+            rawName.includes('broker') ? 'broker' :
+            rawName.includes('pro') ? 'pro' :
+            rawName.includes('standard') ? 'standard' :
+            'free';
           await query(
             `UPDATE digest.subscriptions SET plan=$1, status='active', paystack_sub_code=$2,
              paystack_email_token=$3, current_period_end=$4, updated_at=NOW()
