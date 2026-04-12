@@ -3,10 +3,34 @@ import { useState, useEffect } from 'react';
 import { useAuth, apiFetch } from '../../contexts/AuthContext';
 import { CheckCircle, Zap, AlertTriangle } from 'lucide-react';
 
+const PLAN_ORDER = ['free', 'standard', 'pro', 'broker', 'institutional'];
+
 const PLANS = [
-  { key: 'free', name: 'Free', price: '₦0', period: 'forever', features: ['Weekly market summary', 'Top 5 securities', '5 watchlist tickers'], cta: 'Current plan', highlight: false },
-  { key: 'standard', name: 'Standard', price: '₦2,500', period: '/month', features: ['Daily digest email', 'Full securities list', 'AI market commentary', 'Active signals', 'Dividend alerts', 'Unlimited watchlist', 'Digest archive'], cta: 'Upgrade to Standard', highlight: true },
-  { key: 'pro', name: 'Pro', price: '₦7,500', period: '/month', features: ['Everything in Standard', 'SMS signal alerts', 'Sector rotation alerts', 'Real-time signals', 'Custom SMS hours'], cta: 'Upgrade to Pro', highlight: false },
+  {
+    key: 'free', name: 'Free', price: '₦0', period: 'forever',
+    features: ['Weekly market summary', 'Top 5 securities', '5 watchlist tickers'],
+    cta: 'Current plan', highlight: false,
+  },
+  {
+    key: 'standard', name: 'Standard', price: '₦10,000', period: '/month',
+    features: ['Daily digest email', 'Full securities list', 'AI market commentary', 'Active signals', 'Dividend alerts', 'Unlimited watchlist', 'Digest archive'],
+    cta: 'Upgrade to Standard', highlight: true,
+  },
+  {
+    key: 'pro', name: 'Pro', price: '₦30,000', period: '/month',
+    features: ['Everything in Standard', 'SMS signal alerts', 'Sector rotation alerts', 'Real-time signals', 'Custom SMS hours'],
+    cta: 'Upgrade to Pro', highlight: false,
+  },
+  {
+    key: 'broker', name: 'Broker', price: '₦50,000', period: '/month',
+    features: ['Everything in Pro', 'CDI deal platform access', 'Portfolio management', 'Commission tracking', 'Escrow access'],
+    cta: 'Upgrade to Broker', highlight: false,
+  },
+  {
+    key: 'institutional', name: 'Institutional', price: '₦150,000', period: '/month',
+    features: ['Everything in Broker', 'Dedicated account manager', 'Custom reporting', 'API access', 'Priority support'],
+    cta: 'Upgrade to Institutional', highlight: false,
+  },
 ];
 
 export function BillingPage() {
@@ -42,8 +66,10 @@ export function BillingPage() {
     try { await apiFetch('/subscriptions/cancel', { method: 'POST' }); await refresh(); alert('Subscription cancelled.'); } catch (err) { alert((err as Error).message); }
   }
 
+  const currentIdx = PLAN_ORDER.indexOf(plan);
+
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-5xl mx-auto">
       <div className="mb-6"><h1 className="text-2xl font-semibold">Billing</h1><p className="text-sm text-[#888] mt-1">Manage your subscription</p></div>
 
       {subscription && plan !== 'free' && (
@@ -57,29 +83,34 @@ export function BillingPage() {
         </div>
       )}
 
-      <div className="grid md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
         {PLANS.map(p => {
           const isCurrent = p.key === plan;
-          const isLower = ['free'].includes(p.key) && plan !== 'free';
+          const thisIdx = PLAN_ORDER.indexOf(p.key);
+          const isLower = thisIdx < currentIdx;
           return (
             <div key={p.key} className={`card relative ${p.highlight ? 'ring-2 ring-[#1a1a1a]' : ''}`}>
               {p.highlight && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#1a1a1a] text-white text-xs px-3 py-1 rounded-full">Most popular</div>}
               <p className="label">{p.name}</p>
-              <p className="text-2xl font-bold mb-0.5">{p.price}</p>
-              <p className="text-xs text-[#aaa] mb-5">{p.period}</p>
-              <ul className="space-y-2 mb-5">
-                {p.features.map(f => <li key={f} className="flex items-start gap-2 text-sm"><CheckCircle size={13} className="text-green-500 mt-0.5 shrink-0" /><span className="text-[#555]">{f}</span></li>)}
+              <p className="text-xl font-bold mb-0.5">{p.price}</p>
+              <p className="text-xs text-[#aaa] mb-4">{p.period}</p>
+              <ul className="space-y-1.5 mb-4">
+                {p.features.map(f => <li key={f} className="flex items-start gap-1.5 text-xs"><CheckCircle size={12} className="text-green-500 mt-0.5 shrink-0" /><span className="text-[#555]">{f}</span></li>)}
               </ul>
               {isCurrent ? <div className="w-full text-center text-xs text-[#888] py-2 border border-[#e5e4e0] rounded-lg">Current plan</div>
                 : isLower ? <div className="w-full text-center text-xs text-[#bbb] py-2">—</div>
-                : <button onClick={() => handleUpgrade(p.key)} disabled={!!checkoutLoading} className={`${p.highlight ? 'btn-primary' : 'btn-secondary'} w-full`}>
-                    {checkoutLoading === p.key ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Zap size={14} />}
+                : <button onClick={() => handleUpgrade(p.key)} disabled={!!checkoutLoading} className={`${p.highlight ? 'btn-primary' : 'btn-secondary'} w-full text-xs`}>
+                    {checkoutLoading === p.key ? <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin inline-block" /> : <Zap size={12} />}
                     {checkoutLoading === p.key ? 'Redirecting…' : p.cta}
                   </button>
               }
             </div>
           );
         })}
+      </div>
+
+      <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+        <strong>Test card:</strong> 4084 0840 8408 4081 — CVV 408 — any future expiry date
       </div>
       <p className="text-xs text-[#aaa] text-center">Payments processed by Paystack. All prices in Nigerian Naira (₦).</p>
     </div>

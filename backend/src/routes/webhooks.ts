@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { query, queryOne } from '../db/client.js';
 import { logEvent } from '../services/audit.js';
 import { createNotification } from '../services/notifications.js';
-import { sendKycApprovedEmail, sendKycRejectedEmail } from '../services/email.js';
+import { sendKycApprovedEmail, sendKycRejectedEmail, sendSubscriptionConfirmationEmail } from '../services/email.js';
 
 const router = Router();
 
@@ -23,15 +23,46 @@ router.post('/paystack', async (req: Request, res: Response) => {
 
   try {
     switch (event.event) {
+      case 'charge.success': {
+        const meta = event.data?.metadata as Record<string, string> | undefined;
+        if (meta?.type !== 'subscription') break;
+        const { subscriber_id, plan } = meta;
+        if (!subscriber_id || !plan) break;
+
+        const periodEnd = new Date(Date.now() + 30 * 24 * 3600_000);
+        await query(
+          `UPDATE digest.subscriptions
+           SET plan=$1, status='active', current_period_end=$2,
+               paystack_sub_code=NULL, paystack_email_token=NULL, updated_at=NOW()
+           WHERE subscriber_id=$3`,
+          [plan, periodEnd, subscriber_id]
+        );
+
+        const sub = await queryOne<{ email: string; name: string }>(
+          'SELECT email, name FROM digest.subscribers WHERE id=$1', [subscriber_id]
+        );
+        if (sub) {
+          try { await sendSubscriptionConfirmationEmail(sub.email, sub.name, plan); } catch (_) {}
+          const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1);
+          await createNotification(
+            subscriber_id, 'subscription_activated',
+            `${planLabel} plan activated`,
+            `Your Aprisys ${plan} subscription is now active. Enjoy full access.`
+          );
+        }
+        break;
+      }
       case 'subscription.create': {
+        // Retained for backwards compatibility with any existing Paystack subscription plans
         const { customer, subscription_code, plan, email_token, next_payment_date } = event.data;
         const sub = await getSubByEmail(customer.email);
-        if (sub) {
+        if (sub && plan?.name) {
+          const planName = plan.name.toLowerCase().replace(' ', '_');
           await query(
             `UPDATE digest.subscriptions SET plan=$1, status='active', paystack_sub_code=$2,
              paystack_email_token=$3, current_period_end=$4, updated_at=NOW()
              WHERE subscriber_id=$5`,
-            [planFromCode(plan.plan_code), subscription_code, email_token, next_payment_date, sub.id]
+            [planName, subscription_code, email_token, next_payment_date, sub.id]
           );
         }
         break;
@@ -176,13 +207,6 @@ router.post('/cellion', async (req: Request, res: Response) => {
 
 async function getSubByEmail(email: string) {
   return queryOne<{ id: string }>('SELECT id FROM digest.subscribers WHERE email=$1', [email]);
-}
-
-function planFromCode(code: string): string {
-  if (code === process.env.PAYSTACK_PRO_PLAN_CODE) return 'pro';
-  if (code === process.env.PAYSTACK_STANDARD_PLAN_CODE) return 'standard';
-  if (code === process.env.PAYSTACK_BROKER_PLAN_CODE) return 'broker';
-  return 'free';
 }
 
 export default router;

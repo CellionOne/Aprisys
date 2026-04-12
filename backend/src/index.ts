@@ -129,18 +129,19 @@ app.post('/api/subscriptions/checkout', async (req, res) => {
   requireAuth(req as any, res, async () => {
     const { initializeTransaction } = await import('./services/paystack.js');
     const { plan } = req.body;
-    const amounts: Record<string, number> = { standard: 250000, pro: 750000, broker: 5000000 };
-    const codes: Record<string, string> = {
-      standard: process.env.PAYSTACK_STANDARD_PLAN_CODE!,
-      pro: process.env.PAYSTACK_PRO_PLAN_CODE!,
-      broker: process.env.PAYSTACK_BROKER_PLAN_CODE!,
+    const amounts: Record<string, number> = {
+      standard: 1_000_000,
+      pro: 3_000_000,
+      broker: 5_000_000,
+      institutional: 15_000_000,
     };
     if (!amounts[plan]) return res.status(400).json({ error: 'Invalid plan' });
     const sub = (req as any).subscriber;
     const result = await initializeTransaction({
-      email: sub.email, amount: amounts[plan], plan: codes[plan],
-      metadata: { subscriber_id: sub.id, plan },
-      callback_url: `${process.env.FRONTEND_URL}/retail/billing?session=success`,
+      email: sub.email,
+      amount: amounts[plan],
+      metadata: { subscriber_id: sub.id, plan, type: 'subscription' },
+      callback_url: `${process.env.FRONTEND_URL}/retail/billing?session=success&plan=${plan}`,
     });
     res.json(result);
   });

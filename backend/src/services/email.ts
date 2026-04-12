@@ -191,6 +191,23 @@ export async function sendAccountSuspendedEmail(email: string, name: string, rea
   });
 }
 
+export async function sendSubscriptionConfirmationEmail(email: string, name: string, plan: string) {
+  const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1);
+  const billingUrl = `${FRONTEND_URL}/retail/billing`;
+  await getResend().emails.send({
+    from: FROM, to: email,
+    subject: `Your Aprisys ${planLabel} subscription is now active`,
+    html: wrap(`
+      <h1 style="font-size:22px;font-weight:600;margin:0 0 8px;color:#1a1a1a">Subscription activated</h1>
+      <p style="color:#555;margin:0 0 16px;line-height:1.6">Hi ${name}, your <strong>${planLabel}</strong> subscription is now active.</p>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin-bottom:24px">
+        <p style="margin:0;font-size:14px;color:#166534">Your account has been upgraded. You now have full access to all ${planLabel} plan features.</p>
+      </div>
+      <a href="${billingUrl}" style="display:inline-block;background:#1a1a1a;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:15px;font-weight:500">View billing</a>
+      <p style="margin:24px 0 0;font-size:13px;color:#aaa">Questions? Contact support@aprisys.com</p>`)
+  });
+}
+
 export async function sendDigestEmail(opts: {
   email: string; name: string; digestHtml: string;
   openToken: string; unsubToken: string; date: string;

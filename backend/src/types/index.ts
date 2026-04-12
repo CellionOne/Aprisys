@@ -15,7 +15,7 @@ export type NotificationType =
   'kyc_approved' | 'kyc_rejected' | 'deal_invited' | 'deal_accepted' | 'deal_declined' |
   'deal_completed' | 'escrow_funded' | 'escrow_released' | 'escrow_disputed' |
   'document_uploaded' | 'document_signed' | 'terms_accepted' | 'eoi_received' |
-  'account_suspended' | 'rating_prompt';
+  'account_suspended' | 'rating_prompt' | 'subscription_activated';
 
 export interface Subscriber {
   id: string;
