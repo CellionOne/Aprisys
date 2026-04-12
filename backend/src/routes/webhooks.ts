@@ -27,7 +27,8 @@ router.post('/paystack', async (req: Request, res: Response) => {
         const meta = event.data?.metadata as Record<string, string> | undefined;
         if (meta?.type !== 'subscription') break;
         const { subscriber_id, plan } = meta;
-        if (!subscriber_id || !plan) break;
+        const allowedPlans = ['standard', 'pro', 'broker', 'institutional'];
+        if (!subscriber_id || !plan || !allowedPlans.includes(plan)) break;
 
         // Validate that the charged amount matches the expected plan amount
         const expectedAmounts: Record<string, number> = {
