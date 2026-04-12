@@ -410,11 +410,23 @@ async function callClaudeDoc(system: string, userContent: string, maxTokens = 40
   return content.type === 'text' ? content.text : '';
 }
 
+async function assertDealAccess(deal_id: string, subscriber_id: string, is_admin: boolean): Promise<boolean> {
+  if (is_admin) return true;
+  const party = await queryOne(
+    `SELECT id FROM cdi.deal_parties WHERE deal_id=$1 AND subscriber_id=$2 AND status='accepted'`,
+    [deal_id, subscriber_id]
+  );
+  return !!party;
+}
+
 // POST /ai/generate-letter-of-offer
 aiRouter.post('/generate-letter-of-offer', ...proMiddleware, async (req: Request, res: Response) => {
   try {
     const { deal_id } = req.body;
     if (!deal_id) return res.status(400).json({ error: 'deal_id required' });
+    if (!await assertDealAccess(deal_id, req.subscriber!.id, req.subscriber!.is_admin)) {
+      return res.status(403).json({ error: 'Access denied — you must be an accepted party on this deal' });
+    }
     const deal = await queryOne<Record<string, unknown>>('SELECT * FROM cdi.deals WHERE id=$1', [deal_id]);
     if (!deal) return res.status(404).json({ error: 'Deal not found' });
     const parties = await query(
@@ -440,6 +452,9 @@ aiRouter.post('/generate-subscription-agreement', ...proMiddleware, async (req: 
   try {
     const { deal_id } = req.body;
     if (!deal_id) return res.status(400).json({ error: 'deal_id required' });
+    if (!await assertDealAccess(deal_id, req.subscriber!.id, req.subscriber!.is_admin)) {
+      return res.status(403).json({ error: 'Access denied — you must be an accepted party on this deal' });
+    }
     const deal = await queryOne<Record<string, unknown>>('SELECT * FROM cdi.deals WHERE id=$1', [deal_id]);
     if (!deal) return res.status(404).json({ error: 'Deal not found' });
     const parties = await query(
@@ -465,6 +480,9 @@ aiRouter.post('/generate-deed-of-assignment', ...proMiddleware, async (req: Requ
   try {
     const { deal_id } = req.body;
     if (!deal_id) return res.status(400).json({ error: 'deal_id required' });
+    if (!await assertDealAccess(deal_id, req.subscriber!.id, req.subscriber!.is_admin)) {
+      return res.status(403).json({ error: 'Access denied — you must be an accepted party on this deal' });
+    }
     const deal = await queryOne<Record<string, unknown>>('SELECT * FROM cdi.deals WHERE id=$1', [deal_id]);
     if (!deal) return res.status(404).json({ error: 'Deal not found' });
     const parties = await query(
@@ -490,6 +508,9 @@ aiRouter.post('/generate-comfort-letter', ...proMiddleware, async (req: Request,
   try {
     const { deal_id } = req.body;
     if (!deal_id) return res.status(400).json({ error: 'deal_id required' });
+    if (!await assertDealAccess(deal_id, req.subscriber!.id, req.subscriber!.is_admin)) {
+      return res.status(403).json({ error: 'Access denied — you must be an accepted party on this deal' });
+    }
     const deal = await queryOne<Record<string, unknown>>('SELECT * FROM cdi.deals WHERE id=$1', [deal_id]);
     if (!deal) return res.status(404).json({ error: 'Deal not found' });
     const parties = await query(

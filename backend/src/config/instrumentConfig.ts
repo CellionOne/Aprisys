@@ -1,4 +1,23 @@
-export const INSTRUMENT_CONFIG: Record<string, any> = {
+export interface MetadataField {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'date' | 'select';
+  options?: (string | number)[];
+  required: boolean;
+}
+
+export interface InstrumentEntry {
+  label: string;
+  category: string;
+  description: string;
+  regulator: string;
+  metadata_fields: MetadataField[];
+  mandatory_docs: string[];
+  warning_docs: string[];
+  escrow_hard_block_types: string[];
+}
+
+export const INSTRUMENT_CONFIG: Record<string, InstrumentEntry> = {
   equity: {
     label: 'Equity',
     category: 'Equity & Exchange-traded',
@@ -315,8 +334,8 @@ export function getChecklist(deal_type: string, account_type: string) {
   const config = INSTRUMENT_CONFIG[deal_type];
   if (!config) return { mandatory: [], recommended: [], hard_block_escrow: false };
   return {
-    mandatory: config.mandatory_docs.map((d: string) => ({ doc_type: d, ...DOC_LABELS[d] })),
-    recommended: config.warning_docs.map((d: string) => ({ doc_type: d, ...DOC_LABELS[d] })),
+    mandatory: config.mandatory_docs.map((d) => ({ doc_type: d, ...DOC_LABELS[d] })),
+    recommended: config.warning_docs.map((d) => ({ doc_type: d, ...DOC_LABELS[d] })),
     hard_block_escrow: config.escrow_hard_block_types.includes(account_type),
   };
 }
