@@ -1,4 +1,10 @@
 import 'dotenv/config';
+
+// Prevent unhandled async rejections from crashing the process
+process.on('unhandledRejection', (reason: any) => {
+  console.error('[Server] Unhandled rejection:', reason?.message ?? reason);
+});
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';

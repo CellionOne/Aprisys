@@ -56,47 +56,58 @@ router.get('/', requireAuth, requireProfessional, async (req: Request, res: Resp
 
 // POST /deals
 router.post('/', ...proMiddleware, async (req: Request, res: Response) => {
-  const {
-    title, deal_type, asset_ticker, asset_name, quantity, unit_price, total_value,
-    conditions = [], expiry_at, visibility = 'private', commission_pct = 0,
-    required_signatories = 1, notes, deal_metadata = {}
-  } = req.body;
+  try {
+    const {
+      title, deal_type, asset_ticker, asset_name, quantity, unit_price, total_value,
+      conditions = [], expiry_at, visibility = 'private', commission_pct = 0,
+      required_signatories = 1, notes, deal_metadata = {}
+    } = req.body;
 
-  if (!title || !deal_type) return res.status(400).json({ error: 'title and deal_type are required' });
+    if (!title || !deal_type) return res.status(400).json({ error: 'title and deal_type are required' });
 
-  const [deal] = await query<{ id: string; reference: string }>(
-    `INSERT INTO cdi.deals (created_by, title, deal_type, asset_ticker, asset_name, quantity, unit_price, total_value, conditions, expiry_at, visibility, commission_pct, required_signatories, notes, deal_metadata)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id, reference`,
-    [req.subscriber!.id, title, deal_type, asset_ticker ?? null, asset_name ?? null,
-     quantity ?? null, unit_price ?? null, total_value ?? null,
-     JSON.stringify(conditions), expiry_at ?? null, visibility, commission_pct, required_signatories,
-     notes ?? null, JSON.stringify(deal_metadata)]
-  );
+    // Coerce empty strings to null for nullable DB columns
+    const safeExpiry = (expiry_at && String(expiry_at).trim()) ? expiry_at : null;
+    const safeTicker = (asset_ticker && String(asset_ticker).trim()) ? asset_ticker : null;
+    const safeAssetName = (asset_name && String(asset_name).trim()) ? asset_name : null;
+    const safeNotes = (notes && String(notes).trim()) ? notes : null;
 
-  // Add creator as a party
-  await query(
-    `INSERT INTO cdi.deal_parties (deal_id, subscriber_id, role, status) VALUES ($1,$2,'creator','accepted')`,
-    [deal.id, req.subscriber!.id]
-  );
+    const [deal] = await query<{ id: string; reference: string }>(
+      `INSERT INTO cdi.deals (created_by, title, deal_type, asset_ticker, asset_name, quantity, unit_price, total_value, conditions, expiry_at, visibility, commission_pct, required_signatories, notes, deal_metadata)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id, reference`,
+      [req.subscriber!.id, title, deal_type, safeTicker, safeAssetName,
+       quantity ?? null, unit_price ?? null, total_value ?? null,
+       JSON.stringify(conditions), safeExpiry, visibility, commission_pct, required_signatories,
+       safeNotes, JSON.stringify(deal_metadata)]
+    );
 
-  // Generate and save regulatory checklist
-  const checklist = getChecklist(deal_type, req.subscriber!.account_type);
-  await query(
-    `UPDATE cdi.deals SET regulatory_checklist=$1 WHERE id=$2`,
-    [JSON.stringify(checklist), deal.id]
-  );
+    // Add creator as a party
+    await query(
+      `INSERT INTO cdi.deal_parties (deal_id, subscriber_id, role, status) VALUES ($1,$2,'creator','accepted')`,
+      [deal.id, req.subscriber!.id]
+    );
 
-  // Async risk scoring
-  if (asset_ticker) {
-    scoreDealRisk(deal.id, req.subscriber!.id)
-      .then(riskData => query(`UPDATE cdi.deals SET cie_risk_score=$1 WHERE id=$2`, [(riskData as any).risk_score, deal.id]))
-      .catch(err => console.error('[AI] Risk score failed:', err));
+    // Generate and save regulatory checklist
+    const checklist = getChecklist(deal_type, req.subscriber!.account_type);
+    await query(
+      `UPDATE cdi.deals SET regulatory_checklist=$1 WHERE id=$2`,
+      [JSON.stringify(checklist), deal.id]
+    );
+
+    // Async risk scoring (non-fatal)
+    if (safeTicker) {
+      scoreDealRisk(deal.id, req.subscriber!.id)
+        .then(riskData => query(`UPDATE cdi.deals SET cie_risk_score=$1 WHERE id=$2`, [(riskData as any).risk_score, deal.id]))
+        .catch(err => console.error('[AI] Risk score failed:', err));
+    }
+
+    await logEvent('deal.created', req.subscriber!.id, req.subscriber!.email, 'deal', deal.id, { reference: deal.reference, deal_type }, req);
+    await createNotification(req.subscriber!.id, 'deal_invited', 'Deal created', `Deal ${deal.reference} has been created.`, 'deal', deal.id);
+
+    res.status(201).json({ ...deal, regulatory_checklist: checklist });
+  } catch (err: any) {
+    console.error('[POST /deals]', err.message);
+    res.status(500).json({ error: err.message ?? 'Failed to create deal' });
   }
-
-  await logEvent('deal.created', req.subscriber!.id, req.subscriber!.email, 'deal', deal.id, { reference: deal.reference, deal_type }, req);
-  await createNotification(req.subscriber!.id, 'deal_invited', 'Deal created', `Deal ${deal.reference} has been created.`, 'deal', deal.id);
-
-  res.status(201).json({ ...deal, regulatory_checklist: checklist });
 });
 
 // GET /deals/:id
