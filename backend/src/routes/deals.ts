@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import multer from 'multer';
 import { requireAuth, requireProfessional, requireVerifiedKyc } from '../middleware/auth.js';
 import { query, queryOne } from '../db/client.js';
 import { logEvent } from '../services/audit.js';
@@ -7,6 +8,9 @@ import { scoreDealRisk, getMarketContext } from '../services/aiService.js';
 import { sendDealInvitationEmail } from '../services/email.js';
 import { v4 as uuidv4 } from 'uuid';
 import { getChecklist } from '../config/instrumentConfig.js';
+import { uploadFile, downloadFile, buildStorageKey } from '../services/storage.js';
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 const router = Router();
 const proMiddleware = [requireAuth, requireProfessional, requireVerifiedKyc];
@@ -319,6 +323,49 @@ router.post('/:id/rate', ...proMiddleware, async (req: Request, res: Response) =
 
   await logEvent('rating.submitted', req.subscriber!.id, req.subscriber!.email, 'deal', req.params.id, { score, rated_id }, req);
   res.json({ message: 'Rating submitted' });
+});
+
+// POST /deals/:id/documents - upload a deal document
+router.post('/:id/documents', ...proMiddleware, upload.single('file'), async (req: Request, res: Response) => {
+  if (!req.file) return res.status(400).json({ error: 'No file provided' });
+  const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
+  if (!allowed.includes(req.file.mimetype)) return res.status(400).json({ error: 'Only PDF, PNG, JPG, DOCX, TXT allowed' });
+
+  const deal = await queryOne<{ created_by: string }>('SELECT created_by FROM cdi.deals WHERE id=$1', [req.params.id]);
+  if (!deal) return res.status(404).json({ error: 'Deal not found' });
+  const party = await queryOne('SELECT id FROM cdi.deal_parties WHERE deal_id=$1 AND subscriber_id=$2', [req.params.id, req.subscriber!.id]);
+  if (!party && !req.subscriber!.is_admin) return res.status(403).json({ error: 'Access denied' });
+
+  const document_type = req.body.document_type ?? 'other';
+  const key = buildStorageKey('deals', req.params.id, req.file.originalname);
+  await uploadFile(key, req.file.buffer, req.file.mimetype);
+
+  const existing = await queryOne<{ max: number }>(`SELECT COALESCE(MAX(version), 0) as max FROM cdi.deal_documents WHERE deal_id=$1 AND document_type=$2`, [req.params.id, document_type]);
+  const version = (existing?.max ?? 0) + 1;
+
+  const [doc] = await query<{ id: string }>(
+    `INSERT INTO cdi.deal_documents (deal_id, uploaded_by, filename, storage_key, document_type, mime_type, file_size, version) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+    [req.params.id, req.subscriber!.id, req.file.originalname, key, document_type, req.file.mimetype, req.file.size, version]
+  );
+
+  await logEvent('deal.document_uploaded', req.subscriber!.id, req.subscriber!.email, 'deal', req.params.id, { document_type, filename: req.file.originalname }, req);
+  res.status(201).json({ id: doc.id, filename: req.file.originalname, document_type, version });
+});
+
+// GET /deals/:id/documents/:docId/download
+router.get('/:id/documents/:docId/download', ...proMiddleware, async (req: Request, res: Response) => {
+  const doc = await queryOne<{ storage_key: string; filename: string; mime_type: string }>(
+    'SELECT storage_key, filename, mime_type FROM cdi.deal_documents WHERE id=$1 AND deal_id=$2', [req.params.docId, req.params.id]
+  );
+  if (!doc) return res.status(404).json({ error: 'Document not found' });
+
+  const party = await queryOne('SELECT id FROM cdi.deal_parties WHERE deal_id=$1 AND subscriber_id=$2', [req.params.id, req.subscriber!.id]);
+  if (!party && !req.subscriber!.is_admin) return res.status(403).json({ error: 'Access denied' });
+
+  const buffer = await downloadFile(doc.storage_key);
+  res.set('Content-Type', doc.mime_type ?? 'application/octet-stream');
+  res.set('Content-Disposition', `attachment; filename="${doc.filename}"`);
+  res.send(buffer);
 });
 
 export default router;
