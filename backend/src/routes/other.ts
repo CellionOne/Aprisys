@@ -715,6 +715,8 @@ adminRouter.get('/digest/stats', async (req: Request, res: Response) => {
 adminRouter.post('/deals/:id/checklist/override', async (req: Request, res: Response) => {
   const { reason } = req.body;
   if (!reason) return res.status(400).json({ error: 'Reason required for checklist override' });
+  const deal = await queryOne<{ id: string }>('SELECT id FROM cdi.deals WHERE id=$1', [req.params.id]);
+  if (!deal) return res.status(404).json({ error: 'Deal not found' });
   await query(
     `UPDATE cdi.deals SET checklist_override=TRUE, checklist_override_by=$1, checklist_override_reason=$2 WHERE id=$3`,
     [req.subscriber!.id, reason, req.params.id]
