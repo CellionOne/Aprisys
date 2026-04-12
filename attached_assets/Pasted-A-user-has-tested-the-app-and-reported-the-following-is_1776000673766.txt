@@ -1,0 +1,27 @@
+A user has tested the app and reported the following issues. Fix all of them:
+1. Dashboard — free tier users see nothing useful
+The dashboard for free plan users only shows an upgrade banner and "digest not composed yet". Add a proper free tier experience:
+
+Show a welcome message explaining what they get on the free plan
+Show the market snapshot cards (ASI, advancing/declining, turnover) — these should be visible to all users
+Show "Today's digest will be available after 7:30pm WAT" with a note that the last available digest can be viewed
+Add a link "View last available digest" that goes to the most recent entry in the archive
+
+2. NGX securities search — only 15 tickers seeded, missing WAPCO, FIDSON etc.
+The watchlist and deal form search only shows the 15 seeded tickers. Add the following additional NGX securities to the seed data in schema.sql AND insert them directly into the database now:
+WAPCO (Lafarge Africa Plc, Building Materials), FIDSON (Fidson Healthcare Plc, Healthcare), FLOURMILL (Flour Mills of Nigeria, Consumer Goods), GUINNESS (Guinness Nigeria Plc, Beverages), NASCON (NASCON Allied Industries, Consumer Goods), UACN (UAC of Nigeria Plc, Conglomerates), BERGER (Berger Paints Nigeria, Building Materials), OKOMUOIL (Okomu Oil Palm, Agriculture), TRANSCORP (Transcorp Plc, Conglomerates), UCAP (United Capital Plc, Financial Services), FIDELITYBK (Fidelity Bank Plc, Banking), STERLINGBN (Sterling Bank Plc, Banking), WEMA (Wema Bank Plc, Banking), MAYBAKER (May & Baker Nigeria, Healthcare), CADBURY (Cadbury Nigeria Plc, Consumer Goods), CUTIX (Cutix Plc, Industrial Goods), DANGSUGAR (Dangote Sugar Refinery, Consumer Goods), INTBREW (International Breweries, Beverages), NBPLC (Nigerian Breweries Plc, Beverages), CONOIL (Conoil Plc, Oil & Gas), ETERNA (Eterna Plc, Oil & Gas), LIVESTOCK (Livestock Feeds Plc, Agriculture), UNILEVER (Unilever Nigeria Plc, Consumer Goods), HONYFLOUR (Honeywell Flour Mills, Consumer Goods), MEYER (Meyer Plc, Building Materials)
+Also add sample CIE scores and prices for all new tickers using the same random seeding approach as the existing tickers.
+3. Settings — delivery time label
+On the Settings page, add a note below the delivery time selector: "Daily digest is generated at 7:30pm WAT. Morning delivery shows the previous evening's digest."
+4. Billing — Paystack error
+When Paystack checkout fails (e.g. placeholder plan codes), show a user-friendly message: "Subscription payments are not yet active. Please contact support@aprisys.com to upgrade." instead of a raw JSON error alert.
+5. Archive — remove the Upgrade badge/lock for free users
+The archive page is accessible to all users — free users can read old digests. Remove the lock/upgrade badge from Archive in the sidebar. The content restriction (no AI commentary, top 5 only) already applies at the digest level. Archive navigation should be free.
+6. Deals platform — add a Back button on New Deal page
+On the Create Deal page (/deals/new), add a "← Back to deals" link at the top left next to the "New deal" heading so users don't have to use the browser back button.
+7. Deals platform — AI market context uses wrong ticker
+The market context panel on the New Deal page is showing context for GTBANK when the user typed GTBANK, but the commentary mentions "Access Holdings" — the AI is confusing GTBANK with ACCESSCORP. This is because the seed data for GTBANK uses GTCO as the ticker but the user typed GTBANK.
+Add GTBANK as an alias — insert a new security with ticker GTBANK pointing to the same data as GTCO, name "Guaranty Trust Holding Co", sector "Banking".
+8. Deals sidebar — no back navigation to retail portal
+The deals platform sidebar shows "Market digest" which goes to /retail/dashboard — that's correct and should stay. But make sure the link works and is clearly labelled "← Market digest" so users understand it takes them back.
+After all fixes, rebuild frontend and backend, restart, and commit to GitHub with message fix: user feedback round 1 — dashboard, tickers, navigation, billing error.
