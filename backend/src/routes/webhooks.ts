@@ -29,6 +29,17 @@ router.post('/paystack', async (req: Request, res: Response) => {
         const { subscriber_id, plan } = meta;
         if (!subscriber_id || !plan) break;
 
+        // Validate that the charged amount matches the expected plan amount
+        const expectedAmounts: Record<string, number> = {
+          standard: 1_000_000, pro: 3_000_000, broker: 5_000_000, institutional: 15_000_000,
+        };
+        const chargedAmount = event.data?.amount as number | undefined;
+        const expectedAmount = expectedAmounts[plan];
+        if (expectedAmount && chargedAmount && chargedAmount < expectedAmount) {
+          console.warn(`[Webhook] charge.success amount mismatch for plan=${plan}: charged=${chargedAmount}, expected=${expectedAmount}`);
+          break;
+        }
+
         const periodEnd = new Date(Date.now() + 30 * 24 * 3600_000);
         await query(
           `UPDATE digest.subscriptions
