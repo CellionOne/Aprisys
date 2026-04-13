@@ -1,7 +1,8 @@
 import { pool } from './client';
-import { INSTRUMENT_CONFIG, getChecklist } from '../config/instrumentConfig';
+import { getChecklist } from '../config/instrumentConfig';
 
-const ADMIN_ID = '65424dea-6757-4df8-adab-ec948204d567';
+const ADMIN_EMAIL = 'admin@aprisys.com';
+const DEMO_SELLER_EMAIL = 'demo.seller@aprisys.com';
 const DEMO_BUYER_EMAIL = 'demo.buyer@aprisys.com';
 
 const DEAL_DATA: Record<string, {
@@ -309,7 +310,38 @@ async function seed() {
   try {
     console.log('[Seed] Starting demo deal seed...');
 
-    // 1. Upsert demo buyer
+    // 1. Resolve admin ID dynamically — fail fast if missing
+    const adminRow = await client.query(
+      `SELECT id FROM digest.subscribers WHERE email = $1`,
+      [ADMIN_EMAIL]
+    );
+    if (!adminRow.rows.length) {
+      throw new Error(`Admin subscriber not found for email: ${ADMIN_EMAIL}`);
+    }
+    const adminId: string = adminRow.rows[0].id;
+    console.log(`[Seed] Admin resolved: ${adminId}`);
+
+    // 2. Upsert demo seller (creator of all deals — admin is NOT a party so admin can see them in marketplace)
+    const sellerResult = await client.query(`
+      INSERT INTO digest.subscribers (email, name, password_hash, email_verified, account_type, kyc_status, account_status, is_admin)
+      VALUES ($1, 'Demo Seller (Institutional)', crypt('DemoSeller1!', gen_salt('bf')), true, 'institutional', 'verified', 'active', false)
+      ON CONFLICT (email) DO UPDATE SET
+        account_type = 'institutional',
+        kyc_status = 'verified',
+        account_status = 'active'
+      RETURNING id
+    `, [DEMO_SELLER_EMAIL]);
+
+    const sellerId: string = sellerResult.rows[0].id;
+    console.log(`[Seed] Demo seller upserted: ${sellerId}`);
+
+    await client.query(`DELETE FROM digest.subscriptions WHERE subscriber_id = $1`, [sellerId]);
+    await client.query(
+      `INSERT INTO digest.subscriptions (subscriber_id, plan, status) VALUES ($1, 'institutional', 'active')`,
+      [sellerId]
+    );
+
+    // 3. Upsert demo buyer (counterparty)
     const buyerResult = await client.query(`
       INSERT INTO digest.subscribers (email, name, password_hash, email_verified, account_type, kyc_status, account_status, is_admin)
       VALUES ($1, 'Demo Buyer (Corporate)', crypt('DemoBuyer1!', gen_salt('bf')), true, 'corporate', 'verified', 'active', false)
@@ -323,14 +355,14 @@ async function seed() {
     const buyerId: string = buyerResult.rows[0].id;
     console.log(`[Seed] Demo buyer upserted: ${buyerId}`);
 
-    // Ensure buyer has a subscription (valid plans: free, standard, pro, broker, institutional)
-    await client.query(`
-      INSERT INTO digest.subscriptions (subscriber_id, plan, status)
-      VALUES ($1, 'pro', 'active')
-      ON CONFLICT DO NOTHING
-    `, [buyerId]);
+    // Ensure buyer has exactly one active subscription (no unique constraint on subscriber_id)
+    await client.query(`DELETE FROM digest.subscriptions WHERE subscriber_id = $1`, [buyerId]);
+    await client.query(
+      `INSERT INTO digest.subscriptions (subscriber_id, plan, status) VALUES ($1, 'pro', 'active')`,
+      [buyerId]
+    );
 
-    // 2. Delete existing [DEMO] deals and their dependent records
+    // 4. Delete existing [DEMO] deals and ALL dependent records (non-cascading tables first)
     const existingDeals = await client.query(`
       SELECT id FROM cdi.deals WHERE title LIKE '[DEMO]%'
     `);
@@ -338,13 +370,15 @@ async function seed() {
     if (existingIds.length > 0) {
       await client.query(`DELETE FROM cdi.escrow_transactions WHERE deal_id = ANY($1)`, [existingIds]);
       await client.query(`DELETE FROM cdi.commissions WHERE deal_id = ANY($1)`, [existingIds]);
+      await client.query(`DELETE FROM cdi.eoi_submissions WHERE deal_id = ANY($1)`, [existingIds]);
+      await client.query(`DELETE FROM cdi.counterparty_ratings WHERE deal_id = ANY($1)`, [existingIds]);
     }
     const deleted = await client.query(`
       DELETE FROM cdi.deals WHERE title LIKE '[DEMO]%' RETURNING id
     `);
     console.log(`[Seed] Deleted ${deleted.rowCount} existing demo deals`);
 
-    // 3. Insert 16 deals
+    // 4. Insert 16 deals
     const dealTypes = Object.keys(DEAL_DATA);
     let inserted = 0;
 
@@ -380,7 +414,7 @@ async function seed() {
         )
         RETURNING id
       `, [
-        ADMIN_ID,
+        sellerId,
         data.title,
         dealType,
         data.asset_ticker ?? null,
@@ -391,7 +425,7 @@ async function seed() {
         data.notes,
         JSON.stringify(data.deal_metadata),
         JSON.stringify(checklist),
-        ADMIN_ID,
+        adminId,
         Math.floor(30 + Math.random() * 50),
         createdDate.toISOString(),
         completedDate.toISOString(),
@@ -399,7 +433,7 @@ async function seed() {
 
       const dealId: string = dealRes.rows[0].id;
 
-      // 4. Insert deal parties
+      // 5. Insert deal parties (seller as creator, demo buyer as buyer)
       await client.query(`
         INSERT INTO cdi.deal_parties (deal_id, subscriber_id, role, status, eoi_submitted, eoi_submitted_at, responded_at)
         VALUES
@@ -407,13 +441,13 @@ async function seed() {
           ($1, $4, 'buyer', 'accepted', true, $5, $5)
       `, [
         dealId,
-        ADMIN_ID,
+        sellerId,
         createdDate.toISOString(),
         buyerId,
         new Date(createdDate.getTime() + 24 * 60 * 60 * 1000).toISOString(),
       ]);
 
-      // 5. Insert released escrow
+      // 6. Insert released escrow
       const fundedDate = new Date(createdDate.getTime() + 2 * 24 * 60 * 60 * 1000);
       const releasedDate = new Date(completedDate.getTime());
       const paystackRef = `PSK_DEMO_${dealType.toUpperCase()}_${Date.now().toString(36).toUpperCase()}`;

@@ -44,7 +44,7 @@ router.get('/', requireAuth, requireProfessional, async (req: Request, res: Resp
             (SELECT COUNT(*) FROM cdi.deal_parties dp WHERE dp.deal_id = d.id AND dp.status = 'accepted') as party_count
      FROM cdi.deals d
      JOIN digest.subscribers s ON s.id = d.created_by
-     WHERE d.visibility = 'marketplace' AND d.status = 'open'
+     WHERE d.visibility = 'marketplace' AND d.status IN ('open', 'completed')
        AND d.created_by != $1
        AND NOT EXISTS (SELECT 1 FROM cdi.deal_parties dp WHERE dp.deal_id = d.id AND dp.subscriber_id = $1)
      ${type ? `AND d.deal_type = '${type}'` : ''}
