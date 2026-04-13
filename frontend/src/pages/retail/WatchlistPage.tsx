@@ -55,12 +55,12 @@ export function WatchlistPage() {
         : items.length === 0 ? <div className="card text-center py-12"><Star size={24} className="text-[#ddd] mx-auto mb-3" /><p className="text-sm text-[#888]">Your watchlist is empty</p></div>
         : <div className="card divide-y divide-[#f0efeb]">
             {items.map(item => {
-              const up = (item.change_pct ?? 0) >= 0;
+              const up = Number(item.change_pct ?? 0) >= 0;
               return (
                 <div key={item.ticker} className="flex items-center gap-4 py-3.5">
                   <div className="flex-1 min-w-0"><p className="text-sm font-semibold">{item.ticker}</p><p className="text-xs text-[#aaa] truncate">{item.company_name}</p></div>
-                  <div className="text-right hidden sm:block"><p className="text-xs text-[#aaa]">IAS</p><p className="text-sm font-semibold">{item.ias?.toFixed(1) ?? '—'}</p></div>
-                  <div className="text-right"><p className="text-sm">₦{item.close?.toFixed(2) ?? '—'}</p><p className={`text-xs flex items-center justify-end gap-0.5 ${up ? 'text-green-600' : 'text-red-600'}`}>{up ? <TrendingUp size={11} /> : <TrendingDown size={11} />}{up ? '+' : ''}{(item.change_pct ?? 0).toFixed(2)}%</p></div>
+                  <div className="text-right hidden sm:block"><p className="text-xs text-[#aaa]">IAS</p><p className="text-sm font-semibold">{item.ias != null ? Number(item.ias).toFixed(1) : '—'}</p></div>
+                  <div className="text-right"><p className="text-sm">₦{item.close != null ? Number(item.close).toFixed(2) : '—'}</p><p className={`text-xs flex items-center justify-end gap-0.5 ${up ? 'text-green-600' : 'text-red-600'}`}>{up ? <TrendingUp size={11} /> : <TrendingDown size={11} />}{up ? '+' : ''}{Number(item.change_pct ?? 0).toFixed(2)}%</p></div>
                   <button onClick={() => remove(item.ticker)} className="p-1.5 text-[#ccc] hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><X size={15} /></button>
                 </div>
               );
@@ -91,7 +91,7 @@ export function DigestPage() {
       <h1 className="text-2xl font-semibold">Today's digest</h1>
       <div className="card">
         <p className="label mb-3">Market snapshot</p>
-        <p className="text-2xl font-bold">{(ms.asi ?? 0).toLocaleString('en-NG', { maximumFractionDigits: 2 })}</p>
+        <p className="text-2xl font-bold">{Number(ms.asi ?? 0).toLocaleString('en-NG', { maximumFractionDigits: 2 })}</p>
         <p className={`text-sm mt-1 ${up ? 'text-green-600' : 'text-red-600'}`}>{up ? '▲' : '▼'} {Math.abs(Number(ms.asi_change_pct ?? 0)).toFixed(2)}%</p>
         <p className="text-xs text-[#888] mt-2">Advancing: {ms.advancing} · Declining: {ms.declining} · Turnover: ₦{(Number(ms.turnover ?? 0)/1e9).toFixed(2)}B</p>
       </div>
@@ -105,7 +105,7 @@ export function DigestPage() {
             <div key={s.ticker} className="flex items-center py-2.5 gap-3">
               <span className="text-xs text-[#ccc] w-5">{i + 1}</span>
               <div className="flex-1 min-w-0"><p className="text-sm font-medium">{s.ticker}</p><p className="text-xs text-[#aaa] truncate">{s.name}</p></div>
-              <div className="text-right"><p className="text-sm font-semibold">{s.ias?.toFixed(1)}</p><p className="text-xs text-[#aaa]">IAS</p></div>
+              <div className="text-right"><p className="text-sm font-semibold">{s.ias != null ? Number(s.ias).toFixed(1) : '—'}</p><p className="text-xs text-[#aaa]">IAS</p></div>
               <div className="text-right w-20"><p className="text-sm">₦{Number(s.close ?? 0).toFixed(2)}</p><p className={`text-xs ${Number(s.change_pct ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{Number(s.change_pct ?? 0) >= 0 ? '+' : ''}{Number(s.change_pct ?? 0).toFixed(2)}%</p></div>
             </div>
           ))}

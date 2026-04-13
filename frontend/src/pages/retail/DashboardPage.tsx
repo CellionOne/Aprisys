@@ -161,13 +161,13 @@ export function RetailDashboard() {
                         <p className="text-xs text-[#aaa] truncate">{s.name}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-semibold">{s.ias?.toFixed(1)}</p>
+                        <p className="text-sm font-semibold">{Number(s.ias ?? 0).toFixed(1)}</p>
                         <p className="text-xs text-[#aaa]">IAS</p>
                       </div>
                       <div className="text-right w-20">
-                        <p className="text-sm">₦{s.close?.toFixed(2)}</p>
-                        <p className={`text-xs ${(s.change_pct ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {(s.change_pct ?? 0) >= 0 ? '+' : ''}{(s.change_pct ?? 0).toFixed(2)}%
+                        <p className="text-sm">₦{Number(s.close ?? 0).toFixed(2)}</p>
+                        <p className={`text-xs ${Number(s.change_pct ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {Number(s.change_pct ?? 0) >= 0 ? '+' : ''}{Number(s.change_pct ?? 0).toFixed(2)}%
                         </p>
                       </div>
                     </div>
